@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Deleted Records — Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <p class="text-muted mb-1"><a href="{{ url_for('admin_index') }}">&larr; Back to admin</a></p>
+    <h1 class="h3 mb-0">Deleted Records</h1>
+    <p class="text-muted mb-0">Hidden from the public site. Restore items to bring them back.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <h2 class="h5">Deleted boards</h2>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Board</th>
+            <th>Removed</th>
+            <th>History</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in deleted_boards %}
+          <tr>
+            <td>{{ b.board_id }}</td>
+            <td>{{ b.product_name }} {{ b.board_name }} #{{ b.serial }}</td>
+            <td class="small text-muted">{{ b.deleted_at }}</td>
+            <td>{{ b.history_count }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('admin_board_restore', board_id=b.board_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Restore</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">No deleted boards.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <h2 class="h5">Deleted firmware records</h2>
+    <p class="small text-muted">Individual history entries removed while the board is still active.</p>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Board</th>
+            <th>Firmware</th>
+            <th>Removed</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in deleted_history %}
+          <tr>
+            <td>{{ row.event_date }}</td>
+            <td>{{ row.product_name }} {{ row.board_name }}</td>
+            <td><code>{{ row.firmware }}</code></td>
+            <td class="small text-muted">{{ row.deleted_at }}</td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('admin_history_restore', event_id=row.event_id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Restore</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">No individually deleted records.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

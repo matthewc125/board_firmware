@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}SQL Console — Admin{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <p class="text-muted mb-1"><a href="{{ url_for('admin_index') }}">&larr; Back to admin</a></p>
+    <h1 class="h3 mb-0">SQL Console</h1>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Tables &amp; views</div>
+      <div class="list-group list-group-flush">
+        {% for t in tables if t.name not in archive_tables %}
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center insert-table"
+                data-query="{{ table_queries[t.name] }}">
+          {{ t.name }}
+          <span class="badge text-bg-light border">{{ t.type }}</span>
+        </button>
+        {% endfor %}
+      </div>
+      <div class="card-header border-top">Deleted records</div>
+      <div class="list-group list-group-flush">
+        {% for t in tables if t.name in archive_tables %}
+        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center insert-table"
+                data-query="{{ table_queries[t.name] }}">
+          {{ t.name }}
+          <span class="badge text-bg-secondary">deleted records</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Query</span>
+        <span class="small text-muted">Tab to accept suggestion · max 5,000 result rows</span>
+      </div>
+      <div class="card-body">
+        <form method="post" id="sql-form">
+          <div class="mb-3">
+            <textarea class="form-control font-monospace" id="query" name="query" rows="8">{{ query }}</textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" name="action" value="run" class="btn btn-primary">Run</button>
+            {% if query and columns %}
+            <button type="submit" name="action" value="download" class="btn btn-outline-secondary">Download CSV</button>
+            {% endif %}
+          </div>
+        </form>
+
+        {% if error %}
+        <div class="alert alert-danger mt-3 mb-0">{{ error }}</div>
+        {% endif %}
+
+        {% if rowcount is not none %}
+        <div class="alert alert-success mt-3 mb-0">Query OK — {{ rowcount }} row(s) affected.</div>
+        {% endif %}
+
+        {% if truncated %}
+        <div class="alert alert-warning mt-3 mb-0">Results truncated to 5,000 rows.</div>
+        {% endif %}
+
+        {% if columns %}
+        <p class="text-muted small mt-3 mb-2">{{ rows|length }} row(s)</p>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle">
+            <thead>
+              <tr>
+                {% for col in columns %}
+                <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr>
+                {% for col in columns %}
+                <td>{{ row[col] if row[col] is not none else '' }}</td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+<script src="{{ url_for('static', filename='sql-inline-complete.js') }}"></script>
+<script>
+  (function () {
+    const schema = {{ sql_schema | tojson }};
+    const textarea = document.getElementById("query");
+    const form = document.getElementById("sql-form");
+
+    const editor = CodeMirror.fromTextArea(textarea, {
+      mode: "text/x-sql",
+      lineNumbers: true,
+      lineWrapping: true,
+      extraKeys: {
+        Tab: function (cm) {
+          if (completion.acceptGhost(cm)) {
+            return;
+          }
+          cm.execCommand("defaultTab");
+        },
+        "Shift-Tab": function (cm) {
+          cm.execCommand("indentLess");
+        },
+      },
+    });
+
+    editor.setSize(null, "14rem");
+    const completion = SqlInlineCompletion.attachInlineCompletion(editor, schema);
+
+    form.addEventListener("submit", function () {
+      editor.save();
+    });
+
+    document.querySelectorAll(".insert-table").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        completion.clearGhost();
+        editor.setValue(btn.dataset.query);
+        editor.focus();
+      });
+    });
+  })();
+</script>
+{% endblock %}

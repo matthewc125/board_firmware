@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Data Export & Query — Board Firmware Log{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">Data Export & Query</h1>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Download CSV</div>
+      <div class="list-group list-group-flush">
+        {% for table in csv_exports %}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+           href="{{ base_path }}data/{{ table.filename }}" download>
+          {{ table.name }}
+          <span class="badge text-bg-light border">{{ table.type }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-body small text-muted">
+        <p class="mb-1"><strong>boards</strong> — one row per physical board</p>
+        <p class="mb-1"><strong>firmware_history</strong> — every flash event</p>
+        <p class="mb-0"><strong>current_firmware</strong> — latest firmware per board</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>SQL Query</span>
+        <span class="small text-muted">SELECT only · max 5,000 rows</span>
+      </div>
+      <div class="card-body">
+        <form id="data-query-form">
+          <div class="mb-3">
+            <textarea id="data-query" class="form-control font-monospace" rows="6" placeholder="SELECT * FROM current_firmware"></textarea>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Run query</button>
+            <button type="button" id="data-query-download" class="btn btn-outline-secondary d-none">Download results as CSV</button>
+          </div>
+        </form>
+
+        <div id="data-query-error" class="alert alert-danger mt-3 mb-0 d-none"></div>
+        <div id="data-query-truncated" class="alert alert-warning mt-3 mb-0 d-none">Results truncated to 5,000 rows.</div>
+
+        <p id="data-query-count" class="text-muted small mt-3 mb-2 d-none"></p>
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle d-none" id="data-query-table">
+            <thead><tr id="data-query-head"></tr></thead>
+            <tbody id="data-query-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% macro result_badge(result) -%}
+  {% if result %}
+    {% set r = result|upper %}
+    {% if r == 'PASS' %}
+      <span class="badge text-bg-success">PASS</span>
+    {% elif r == 'FAIL' %}
+      <span class="badge text-bg-danger">FAIL</span>
+    {% else %}
+      <span class="badge text-bg-secondary">{{ result }}</span>
+    {% endif %}
+  {% else %}
+    <span class="text-muted">—</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro sort_link(label, column, sort, order, product=None, firmware=None, q=None) -%}
+  {% set new_order = 'desc' if sort == column and order == 'asc' else 'asc' %}
+  <a href="{{ url_for('index', sort=column, order=new_order, product=product, firmware=firmware, q=q) }}" class="text-decoration-none text-reset">
+    {{ label }}{% if sort == column %} {% if order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
+  </a>
+{%- endmacro %}
+
+{% macro hw_sort_link(label, column, sort, order, q=None) -%}
+  {% set new_order = 'desc' if sort == column and order == 'asc' else 'asc' %}
+  <a href="/hardware?sort={{ column }}&order={{ new_order }}{% if q %}&q={{ q|urlencode }}{% endif %}" class="text-decoration-none text-reset">
+    {{ label }}{% if sort == column %} {% if order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
+  </a>
+{%- endmacro %}

@@ -1,0 +1,8 @@
+site/
+__pycache__/
+*.py[cod]
+.Python
+.env
+.venv/
+venv/
+.cursor/

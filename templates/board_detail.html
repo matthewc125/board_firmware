@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% from "macros.html" import result_badge %}
+
+{% block title %}Board {{ board.board_id }} — Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+  <div>
+    <p class="text-muted mb-1"><a href="{{ url_for('index') }}">&larr; Back</a></p>
+    <h1 class="h3 mb-0">{{ board.product_name }} {{ board.board_name }}</h1>
+    <p class="text-muted mb-0">Board ID {{ board.board_id }}</p>
+  </div>
+  {% if session.get('admin') %}
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('admin_board_edit', board_id=board.board_id) }}" class="btn btn-sm btn-outline-secondary">Edit board</a>
+    <a href="{{ url_for('admin_history_new', board_id=board.board_id) }}" class="btn btn-sm btn-primary">Add firmware record</a>
+    <form method="post" action="{{ url_for('admin_board_delete', board_id=board.board_id) }}" class="d-inline"
+          onsubmit="return confirm('Move this board and all its firmware history to deleted records?')">
+      <button type="submit" class="btn btn-sm btn-outline-danger">Remove board</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">Board Information</div>
+      <dl class="card-body mb-0 row">
+        <dt class="col-sm-4">Product</dt><dd class="col-sm-8">{{ board.product_name }}</dd>
+        <dt class="col-sm-4">Board type</dt><dd class="col-sm-8">{{ board.board_name }}</dd>
+        <dt class="col-sm-4">Tool</dt><dd class="col-sm-8">{{ board.tool or '—' }}</dd>
+        <dt class="col-sm-4">Slot</dt><dd class="col-sm-8">{{ board.board_slot or '—' }}</dd>
+        <dt class="col-sm-4">Serial</dt><dd class="col-sm-8">{{ board.serial }}</dd>
+        <dt class="col-sm-4">Part number</dt><dd class="col-sm-8">{{ board.part_number or '—' }}</dd>
+        <dt class="col-sm-4">Revision</dt><dd class="col-sm-8">{{ board.revision or '—' }}</dd>
+        <dt class="col-sm-4">File ID</dt><dd class="col-sm-8">{{ board.file_id or '—' }}</dd>
+        <dt class="col-sm-4">DDR FBGA</dt><dd class="col-sm-8">{{ board.ddr_fbga or '—' }}</dd>
+        <dt class="col-sm-4">Manufacturer</dt><dd class="col-sm-8">{{ board.manufacturer }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <h2 class="h5">Firmware History</h2>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>FPGA</th>
+            <th>Firmware</th>
+            <th>Installer</th>
+            <th>Result</th>
+            {% if session.get('admin') %}<th></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in history %}
+          <tr>
+            <td>{{ row.event_date }}{% if row.event_time %} {{ row.event_time }}{% endif %}</td>
+            <td>{{ row.fpga or '—' }}</td>
+            <td><code>{{ row.firmware }}</code></td>
+            <td>{{ row.installer or '—' }}</td>
+            <td>{{ result_badge(row.result) }}</td>
+            {% if session.get('admin') %}
+            <td class="text-nowrap">
+              <a href="{{ url_for('admin_history_edit', event_id=row.event_id) }}" class="small me-2">Edit</a>
+              <form method="post" action="{{ url_for('admin_history_delete', event_id=row.event_id) }}" class="d-inline"
+                    onsubmit="return confirm('Move this firmware record to deleted records?')">
+                <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline">Remove</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-muted">No firmware history for this board.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

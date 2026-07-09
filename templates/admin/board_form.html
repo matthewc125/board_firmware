@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{% if board %}Edit Board{% else %}Add Board{% endif %}{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">{% if board %}Edit Board {{ board.board_id }}{% else %}Add Board{% endif %}</h1>
+
+<form method="post" class="row g-3">
+  <div class="col-md-3">
+    <label class="form-label">Board ID</label>
+    <input type="number" class="form-control" name="board_id" value="{{ board.board_id if board else next_id }}" {% if board %}readonly{% endif %} required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Product name</label>
+    <input type="text" class="form-control" name="product_name" value="{{ board.product_name if board else '' }}" placeholder="ES4, EM1, OBJ" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Board type</label>
+    <input type="text" class="form-control" name="board_name" value="{{ board.board_name if board else '' }}" placeholder="USF, LSF, LSCC" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Serial</label>
+    <input type="text" class="form-control" name="serial" value="{{ board.serial if board else '' }}" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Tool</label>
+    <input type="text" class="form-control" name="tool" value="{{ board.tool if board else '' }}" placeholder="Tool9, Bench">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Slot</label>
+    <input type="text" class="form-control" name="board_slot" value="{{ board.board_slot if board else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Part number</label>
+    <input type="text" class="form-control" name="part_number" value="{{ board.part_number if board else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Revision</label>
+    <input type="text" class="form-control" name="revision" value="{{ board.revision if board else '' }}" placeholder="Rev D">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">File ID</label>
+    <input type="text" class="form-control" name="file_id" value="{{ board.file_id if board else '' }}" placeholder="CCB local-IO EEPROM 0x50">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">DDR FBGA</label>
+    <input type="text" class="form-control" name="ddr_fbga" value="{{ board.ddr_fbga if board else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Manufacturer</label>
+    <input type="text" class="form-control" name="manufacturer" value="{{ board.manufacturer if board else 'PDF Solutions Inc.' }}">
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('admin_index') }}" class="btn btn-link">Cancel</a>
+  </div>
+</form>
+
+{% if board %}
+<form method="post" action="{{ url_for('admin_board_delete', board_id=board.board_id) }}" class="mt-4"
+      onsubmit="return confirm('Move this board and all its firmware history to deleted records?')">
+  <button type="submit" class="btn btn-outline-danger btn-sm">Remove board</button>
+</form>
+{% endif %}
+{% endblock %}

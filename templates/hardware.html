@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "macros.html" import hw_sort_link %}
+
+{% block title %}Hardware — Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-0">Hardware</h1>
+  </div>
+  <form id="search-form" action="{{ url_for('hardware') }}" method="get" class="d-flex gap-2">
+    <input type="search" id="board-search" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search ID, tool, serial, part number, revision, DDR…">
+    <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
+  </form>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead>
+      <tr>
+        <th>{{ hw_sort_link('ID', 'board_id', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Product', 'product_name', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Type', 'board_name', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Tool', 'tool', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Slot', 'board_slot', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Serial', 'serial', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Part Number', 'part_number', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Revision', 'revision', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('File ID', 'file_id', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('DDR FBGA', 'ddr_fbga', sort, order, search) }}</th>
+        <th>{{ hw_sort_link('Manufacturer', 'manufacturer', sort, order, search) }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in boards %}
+      <tr>
+        <td><a href="{{ url_for('board_detail', board_id=b.board_id) }}">{{ b.board_id }}</a></td>
+        <td>{{ b.product_name }}</td>
+        <td>{{ b.board_name }}</td>
+        <td>{{ b.tool or '—' }}</td>
+        <td>{{ b.board_slot or '—' }}</td>
+        <td>{{ b.serial }}</td>
+        <td>{{ b.part_number or '—' }}</td>
+        <td>{{ b.revision or '—' }}</td>
+        <td>{{ b.file_id or '—' }}</td>
+        <td>{{ b.ddr_fbga or '—' }}</td>
+        <td>{{ b.manufacturer or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="11" class="text-muted">No boards match your search.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="text-muted small">{{ boards|length }} board(s)</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const form = document.getElementById("search-form");
+    const input = document.getElementById("board-search");
+    if (!form || !input) return;
+
+    function submitIfCleared() {
+      if (input.value === "") {
+        form.requestSubmit();
+      }
+    }
+
+    input.addEventListener("search", submitIfCleared);
+    input.addEventListener("input", submitIfCleared);
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-1">Board Firmware Log</h1>
+    <p id="index-filter-summary" class="text-muted mb-0 d-none"></p>
+  </div>
+  <form id="search-form" class="d-flex gap-2">
+    <input type="search" id="board-search" class="form-control form-control-sm" placeholder="Search ID, tool, serial, part number, revision, DDR…">
+    <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
+  </form>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-9">
+    <h2 class="h5">Current Firmware</h2>
+    <div class="table-responsive mb-4">
+      <table class="table table-sm table-hover align-middle">
+        <thead>
+          <tr id="boards-head"></tr>
+        </thead>
+        <tbody id="boards-body"></tbody>
+      </table>
+    </div>
+    <p id="boards-count" class="text-muted small"></p>
+
+    <h2 class="h5 mt-4">Firmware History</h2>
+    <div class="table-scroll-panel">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Board</th>
+            <th>Tool</th>
+            <th>Firmware</th>
+            <th>FPGA</th>
+            <th>Installer</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+    <p id="history-count" class="text-muted small"></p>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="card mb-3">
+      <div class="card-body" id="dashboard-stats"></div>
+    </div>
+
+    <h2 class="h6">Board Types</h2>
+    <div class="list-group mb-4" id="product-filters"></div>
+
+    <h2 class="h6">Firmware Versions</h2>
+    <div class="list-group" id="firmware-filters"></div>
+  </div>
+</div>
+{% endblock %}

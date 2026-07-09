@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{% if event %}Edit Firmware Record{% else %}Add Firmware Record{% endif %}{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">{% if event %}Edit Firmware Record{% else %}Add Firmware Record{% endif %}</h1>
+
+<form method="post" class="row g-3">
+  <div class="col-md-6">
+    <label class="form-label">Board</label>
+    <select class="form-select" name="board_id" required>
+      {% for b in boards %}
+      <option value="{{ b.board_id }}"
+        {% if (event and event.board_id == b.board_id) or (default_board_id and default_board_id == b.board_id) %}selected{% endif %}>
+        {{ b.board_id }} — {{ b.product_name }} {{ b.board_name }} {{ b.tool }} #{{ b.serial }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Date</label>
+    <input type="date" class="form-control" name="event_date" value="{{ event.event_date if event else '' }}" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Time</label>
+    <input type="time" class="form-control" name="event_time" value="{{ event.event_time if event and event.event_time else '' }}">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Firmware</label>
+    <input type="text" class="form-control" name="firmware" value="{{ event.firmware if event else '' }}" required>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label">FPGA</label>
+    <input type="text" class="form-control" name="fpga" value="{{ event.fpga if event else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Installer</label>
+    <input type="text" class="form-control" name="installer" value="{{ event.installer if event else '' }}" placeholder="Vivado, OpalKelly">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Result</label>
+    <select class="form-select" name="result">
+      <option value="PASS" {% if event and event.result == 'PASS' %}selected{% elif not event %}selected{% endif %}>PASS</option>
+      <option value="FAIL" {% if event and event.result == 'FAIL' %}selected{% endif %}>FAIL</option>
+    </select>
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Save</button>
+    {% if event %}
+    <a href="{{ url_for('board_detail', board_id=event.board_id) }}" class="btn btn-link">Cancel</a>
+    {% else %}
+    <a href="{{ url_for('admin_index') }}" class="btn btn-link">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if event %}
+<form method="post" action="{{ url_for('admin_history_delete', event_id=event.event_id) }}" class="mt-4"
+      onsubmit="return confirm('Move this firmware record to deleted records?')">
+  <button type="submit" class="btn btn-outline-danger btn-sm">Remove record</button>
+</form>
+{% endif %}
+{% endblock %}

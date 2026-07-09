@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Hardware — Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-0">Hardware</h1>
+  </div>
+  <form id="search-form" class="d-flex gap-2">
+    <input type="search" id="board-search" class="form-control form-control-sm" placeholder="Search ID, tool, serial, part number, revision, DDR…">
+    <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
+  </form>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm table-hover align-middle">
+    <thead>
+      <tr id="hardware-head"></tr>
+    </thead>
+    <tbody id="hardware-body"></tbody>
+  </table>
+</div>
+<p id="hardware-count" class="text-muted small"></p>
+{% endblock %}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Board Firmware Log{% endblock %}</title>
+  <link rel="icon" href="{{ base_path }}static/favicon.svg" type="image/svg+xml">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ base_path }}static/style.css" rel="stylesheet">
+  <script>
+    window.SITE_BASE = {{ base_path | tojson }};
+    window.SITE_BUILT_AT = {{ built_at | tojson }};
+    window.SITE_PAGE = {{ page | tojson }};
+  </script>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{{ base_path }}index.html">Firmware Log</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="nav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ base_path }}index.html" data-nav="index">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ base_path }}hardware.html" data-nav="hardware">Hardware</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ base_path }}data.html" data-nav="data">Data</a></li>
+        </ul>
+        <span class="navbar-text small text-secondary">Read-only snapshot · {{ built_at }}</span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container pb-5">
+    <div id="site-loading" class="alert alert-info">Loading database…</div>
+    <div id="site-error" class="alert alert-danger d-none"></div>
+    <div id="site-content" class="d-none">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
+  <script src="{{ base_path }}static/site.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,59 @@
+body {
+  background-color: #f8f9fa;
+}
+
+code {
+  font-size: 0.875em;
+}
+
+.table th {
+  white-space: nowrap;
+}
+
+.card dl dt {
+  color: #6c757d;
+}
+
+.list-group-item.filter-disabled {
+  color: #adb5bd;
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.list-group-item.filter-disabled code {
+  color: #adb5bd;
+}
+
+.CodeMirror {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  font-family: var(--bs-font-monospace);
+  font-size: 0.875rem;
+}
+
+.CodeMirror-scroll {
+  min-height: 14rem;
+}
+
+.sql-inline-ghost {
+  color: #adb5bd;
+  opacity: 0.85;
+}
+
+.table-scroll-panel {
+  max-height: 26rem;
+  overflow: auto;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background-color: #fff;
+}
+
+.table-scroll-panel thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #fff;
+  box-shadow: inset 0 -1px 0 var(--bs-border-color);
+}

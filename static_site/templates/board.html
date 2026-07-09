@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Board — Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+  <div>
+    <p class="text-muted mb-1"><a href="{{ base_path }}index.html">&larr; Back</a></p>
+    <h1 id="board-title" class="h3 mb-0"></h1>
+    <p id="board-subtitle" class="text-muted mb-0"></p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">Board Information</div>
+      <dl id="board-info" class="card-body mb-0 row"></dl>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <h2 class="h5">Firmware History</h2>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>FPGA</th>
+            <th>Firmware</th>
+            <th>Installer</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="board-history-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
