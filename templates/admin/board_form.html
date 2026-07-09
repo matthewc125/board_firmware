@@ -19,16 +19,12 @@
     <input type="text" class="form-control" name="board_name" value="{{ board.board_name if board else '' }}" placeholder="USF, LSF, LSCC" required>
   </div>
   <div class="col-md-3">
-    <label class="form-label">Serial</label>
-    <input type="text" class="form-control" name="serial" value="{{ board.serial if board else '' }}" required>
-  </div>
-  <div class="col-md-3">
-    <label class="form-label">Tool</label>
+    <label class="form-label">Location</label>
     <input type="text" class="form-control" name="tool" value="{{ board.tool if board else '' }}" placeholder="Tool9, Bench">
   </div>
   <div class="col-md-3">
-    <label class="form-label">Slot</label>
-    <input type="text" class="form-control" name="board_slot" value="{{ board.board_slot if board else '' }}">
+    <label class="form-label">Serial</label>
+    <input type="text" class="form-control" name="serial" value="{{ board.serial if board else '' }}" required>
   </div>
   <div class="col-md-3">
     <label class="form-label">Part number</label>
@@ -49,6 +45,26 @@
   <div class="col-md-3">
     <label class="form-label">Manufacturer</label>
     <input type="text" class="form-control" name="manufacturer" value="{{ board.manufacturer if board else 'PDF Solutions Inc.' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Inventory serial</label>
+    <input type="text" class="form-control" name="inventory_serial" value="{{ board.inventory_serial if board else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Status</label>
+    <input type="text" class="form-control" name="status" value="{{ board.status if board else '' }}" placeholder="Active, Repair">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Role</label>
+    <input type="text" class="form-control" name="role" value="{{ board.role if board else '' }}">
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Comment</label>
+    <input type="text" class="form-control" name="comment" value="{{ board.comment if board else '' }}">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Data source</label>
+    <input type="text" class="form-control" name="data_source" value="{{ board.data_source if board else '' }}" placeholder="firmware_log">
   </div>
   <div class="col-12">
     <button type="submit" class="btn btn-primary">Save</button>

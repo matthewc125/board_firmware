@@ -13,9 +13,9 @@
   {% endif %}
 {%- endmacro %}
 
-{% macro sort_link(label, column, sort, order, product=None, firmware=None, q=None) -%}
+{% macro sort_link(label, column, sort, order, product=None, firmware=None, tool=None, q=None) -%}
   {% set new_order = 'desc' if sort == column and order == 'asc' else 'asc' %}
-  <a href="{{ url_for('index', sort=column, order=new_order, product=product, firmware=firmware, q=q) }}" class="text-decoration-none text-reset">
+  <a href="{{ url_for('index', sort=column, order=new_order, product=product, firmware=firmware, tool=tool, q=q) }}" class="text-decoration-none text-reset">
     {{ label }}{% if sort == column %} {% if order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
   </a>
 {%- endmacro %}

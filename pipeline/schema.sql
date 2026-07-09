@@ -3,17 +3,31 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS boards (
-    board_id      INTEGER PRIMARY KEY,
-    tool          TEXT,
-    board_slot    TEXT,
-    manufacturer  TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
-    board_name    TEXT NOT NULL,
-    serial        TEXT NOT NULL,
-    part_number   TEXT,
-    revision      TEXT,
-    file_id       TEXT,
-    product_name  TEXT NOT NULL,
-    ddr_fbga      TEXT
+    board_id          INTEGER PRIMARY KEY,
+    tool              TEXT,
+    board_slot        TEXT,
+    manufacturer      TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
+    board_name        TEXT NOT NULL,
+    serial            TEXT NOT NULL,
+    part_number       TEXT,
+    revision          TEXT,
+    file_id           TEXT,
+    product_name      TEXT NOT NULL,
+    ddr_fbga          TEXT,
+    inventory_serial  TEXT,
+    status            TEXT,
+    role              TEXT,
+    comment           TEXT,
+    open_item         TEXT,
+    po                TEXT,
+    modified_by       TEXT,
+    source_updated_at TEXT,
+    data_source       TEXT,
+    dc_status         TEXT,
+    ac_status         TEXT,
+    gcal_status       TEXT,
+    adc_status        TEXT,
+    eeprom_status     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS firmware_history (
@@ -28,18 +42,57 @@ CREATE TABLE IF NOT EXISTS firmware_history (
 );
 
 CREATE TABLE IF NOT EXISTS deleted_boards (
-    board_id      INTEGER PRIMARY KEY,
+    board_id          INTEGER PRIMARY KEY,
+    tool              TEXT,
+    board_slot        TEXT,
+    manufacturer      TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
+    board_name        TEXT NOT NULL,
+    serial            TEXT NOT NULL,
+    part_number       TEXT,
+    revision          TEXT,
+    file_id           TEXT,
+    product_name      TEXT NOT NULL,
+    ddr_fbga          TEXT,
+    inventory_serial  TEXT,
+    status            TEXT,
+    role              TEXT,
+    comment           TEXT,
+    open_item         TEXT,
+    po                TEXT,
+    modified_by       TEXT,
+    source_updated_at TEXT,
+    data_source       TEXT,
+    dc_status         TEXT,
+    ac_status         TEXT,
+    gcal_status       TEXT,
+    adc_status        TEXT,
+    eeprom_status     TEXT,
+    deleted_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS board_events (
+    event_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id      INTEGER NOT NULL REFERENCES boards (board_id),
+    event_date    TEXT NOT NULL,
+    event_time    TEXT,
+    event_type    TEXT NOT NULL,
+    description   TEXT NOT NULL,
     tool          TEXT,
-    board_slot    TEXT,
-    manufacturer  TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
-    board_name    TEXT NOT NULL,
-    serial        TEXT NOT NULL,
-    part_number   TEXT,
-    revision      TEXT,
-    file_id       TEXT,
-    product_name  TEXT NOT NULL,
-    ddr_fbga      TEXT,
-    deleted_at    TEXT NOT NULL
+    source        TEXT NOT NULL,
+    source_ref    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS import_runs (
+    run_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_name   TEXT NOT NULL,
+    imported_at   TEXT NOT NULL,
+    file_path     TEXT,
+    rows_read     INTEGER,
+    boards_created INTEGER,
+    boards_updated INTEGER,
+    boards_merged INTEGER,
+    events_created INTEGER,
+    warnings      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS deleted_firmware_history (
@@ -56,6 +109,13 @@ CREATE TABLE IF NOT EXISTS deleted_firmware_history (
 
 CREATE INDEX IF NOT EXISTS idx_firmware_history_board_date
     ON firmware_history (board_id, event_date, event_time);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_boards_inventory_serial
+    ON boards (inventory_serial)
+    WHERE inventory_serial IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_board_events_board_date
+    ON board_events (board_id, event_date);
 
 CREATE VIEW IF NOT EXISTS current_firmware AS
 SELECT

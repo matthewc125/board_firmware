@@ -11,6 +11,7 @@
     "{a}.tool",
     "{a}.board_slot",
     "{a}.serial",
+    "{a}.inventory_serial",
     "{a}.part_number",
     "{a}.product_name",
     "{a}.board_name",
@@ -18,6 +19,9 @@
     "{a}.revision",
     "{a}.file_id",
     "{a}.ddr_fbga",
+    "{a}.status",
+    "{a}.role",
+    "{a}.comment",
   ];
   const MAX_QUERY_ROWS = 5000;
 
@@ -177,7 +181,7 @@
     return `<a href="?${params.toString()}" class="text-decoration-none text-reset">${escapeHtml(label)}${arrow}</a>`;
   }
 
-  function listBoards({ product, firmware, search, sort = "board_id", order = "asc" }) {
+  function listBoards({ product, firmware, tool, search, sort = "board_id", order = "asc" }) {
     const allowedSort = {
       board_id: "b.board_id",
       tool: "b.tool",
@@ -200,6 +204,14 @@
       clauses.push("cf.firmware = ?");
       params.push(firmware);
     }
+    if (tool) {
+      if (tool === "(Unassigned)") {
+        clauses.push("b.tool IS NULL");
+      } else {
+        clauses.push("b.tool = ?");
+        params.push(tool);
+      }
+    }
     const searchBits = boardSearchClause(search, "b", ["cf.firmware"]);
     if (searchBits.clause) {
       clauses.push(searchBits.clause);
@@ -213,7 +225,7 @@
         b.*,
         cf.firmware AS current_firmware,
         cf.fpga AS current_fpga,
-        cf.event_date AS last_update
+        COALESCE(cf.event_date, b.source_updated_at) AS last_update
       FROM boards b
       LEFT JOIN current_firmware cf ON cf.board_id = b.board_id
       ${where}
@@ -223,7 +235,7 @@
     );
   }
 
-  function listHistory({ product, firmware, search }) {
+  function listHistory({ product, firmware, tool, search }) {
     const clauses = [];
     const params = [];
 
@@ -234,6 +246,14 @@
     if (firmware) {
       clauses.push("h.firmware = ?");
       params.push(firmware);
+    }
+    if (tool) {
+      if (tool === "(Unassigned)") {
+        clauses.push("b.tool IS NULL");
+      } else {
+        clauses.push("b.tool = ?");
+        params.push(tool);
+      }
     }
     const searchBits = boardSearchClause(search, "b", ["h.firmware"]);
     if (searchBits.clause) {
@@ -274,6 +294,8 @@
       board_name: "board_name",
       product_name: "product_name",
       serial: "serial",
+      inventory_serial: "inventory_serial",
+      status: "status",
       part_number: "part_number",
       revision: "revision",
       file_id: "file_id",
@@ -363,10 +385,78 @@
     );
   }
 
+  function toolStats() {
+    return runSelect(
+      `
+      SELECT COALESCE(tool, '(Unassigned)') AS tool, COUNT(*) AS board_count
+      FROM boards
+      GROUP BY COALESCE(tool, '(Unassigned)')
+      ORDER BY CASE WHEN tool = '(Unassigned)' THEN 1 ELSE 0 END, tool ASC
+      `,
+    );
+  }
+
+  function productsForTool(tool) {
+    if (tool === "(Unassigned)") {
+      return new Set(runSelect("SELECT DISTINCT product_name FROM boards WHERE tool IS NULL").map((row) => row.product_name));
+    }
+    return new Set(runSelect("SELECT DISTINCT product_name FROM boards WHERE tool = ?", [tool]).map((row) => row.product_name));
+  }
+
+  function firmwareForTool(tool) {
+    if (tool === "(Unassigned)") {
+      return new Set(
+        runSelect(
+          `
+          SELECT DISTINCT cf.firmware
+          FROM current_firmware cf
+          JOIN boards b ON b.board_id = cf.board_id
+          WHERE b.tool IS NULL AND cf.firmware IS NOT NULL
+          `,
+        ).map((row) => row.firmware),
+      );
+    }
+    return new Set(
+      runSelect(
+        `
+        SELECT DISTINCT cf.firmware
+        FROM current_firmware cf
+        JOIN boards b ON b.board_id = cf.board_id
+        WHERE b.tool = ? AND cf.firmware IS NOT NULL
+        `,
+        [tool],
+      ).map((row) => row.firmware),
+    );
+  }
+
+  function toolsForProduct(productName) {
+    return new Set(
+      runSelect(
+        "SELECT DISTINCT COALESCE(tool, '(Unassigned)') AS tool FROM boards WHERE product_name = ?",
+        [productName],
+      ).map((row) => row.tool),
+    );
+  }
+
+  function toolsForFirmware(firmware) {
+    return new Set(
+      runSelect(
+        `
+        SELECT DISTINCT COALESCE(b.tool, '(Unassigned)') AS tool
+        FROM current_firmware cf
+        JOIN boards b ON b.board_id = cf.board_id
+        WHERE cf.firmware = ?
+        `,
+        [firmware],
+      ).map((row) => row.tool),
+    );
+  }
+
   function renderIndex() {
     const params = getParams();
     const product = params.get("product") || "";
     const firmware = params.get("firmware") || "";
+    const tool = params.get("tool") || "";
     const search = params.get("q") || "";
     const sort = params.get("sort") || "board_id";
     const order = params.get("order") || "asc";
@@ -375,13 +465,20 @@
     if (searchInput) searchInput.value = search;
 
     const filterSummary = document.getElementById("index-filter-summary");
-    if (filterSummary && (product || firmware)) {
+    if (filterSummary && (product || firmware || tool)) {
       const bits = [];
       if (product) {
         const remove = new URLSearchParams(params);
         remove.delete("product");
         bits.push(
           `<a href="?${remove.toString()}" class="badge text-bg-primary text-decoration-none" title="Click to remove">${escapeHtml(product)} ×</a>`,
+        );
+      }
+      if (tool) {
+        const remove = new URLSearchParams(params);
+        remove.delete("tool");
+        bits.push(
+          `<a href="?${remove.toString()}" class="badge text-bg-primary text-decoration-none" title="Click to remove">${escapeHtml(tool)} ×</a>`,
         );
       }
       if (firmware) {
@@ -394,21 +491,29 @@
       const clear = new URLSearchParams(params);
       clear.delete("product");
       clear.delete("firmware");
+      clear.delete("tool");
       filterSummary.innerHTML = `Filtered: ${bits.join(" ")} <a href="?${clear.toString()}" class="small ms-1">Clear filters</a>`;
       filterSummary.classList.remove("d-none");
+    } else if (filterSummary) {
+      filterSummary.classList.add("d-none");
     }
 
-    const boards = listBoards({ product, firmware, search, sort, order });
-    const history = listHistory({ product, firmware, search });
+    const boards = listBoards({ product, firmware, tool, search, sort, order });
+    const history = listHistory({ product, firmware, tool, search });
     const stats = dashboardStats();
     const products = boardProducts();
     const fwStats = firmwareStats();
+    const toolList = toolStats();
     const availableFirmware = product ? firmwareForProduct(product) : new Set();
     const availableProducts = firmware ? productsForFirmware(firmware) : new Set();
+    const availableTools = product ? toolsForProduct(product) : (firmware ? toolsForFirmware(firmware) : new Set());
+    const availableProductsForTool = tool ? productsForTool(tool) : new Set();
+    const availableFirmwareForTool = tool ? firmwareForTool(tool) : new Set();
 
     const linkParams = new URLSearchParams();
     if (product) linkParams.set("product", product);
     if (firmware) linkParams.set("firmware", firmware);
+    if (tool) linkParams.set("tool", tool);
     if (search) linkParams.set("q", search);
 
     const head = document.getElementById("boards-head");
@@ -417,8 +522,7 @@
         sortLink("ID", "board_id", sort, order, linkParams),
         sortLink("Product", "product_name", sort, order, linkParams),
         sortLink("Type", "board_name", sort, order, linkParams),
-        sortLink("Tool", "tool", sort, order, linkParams),
-        "Slot",
+        sortLink("Location", "tool", sort, order, linkParams),
         sortLink("Serial", "serial", sort, order, linkParams),
         sortLink("Firmware", "firmware", sort, order, linkParams),
         "FPGA",
@@ -435,14 +539,13 @@
             <td>${escapeHtml(board.product_name)}</td>
             <td>${escapeHtml(board.board_name)}</td>
             <td>${dash(board.tool)}</td>
-            <td>${dash(board.board_slot)}</td>
             <td>${escapeHtml(board.serial)}</td>
             <td>${board.current_firmware ? `<code>${escapeHtml(board.current_firmware)}</code>` : '<span class="text-muted">—</span>'}</td>
             <td>${dash(board.current_fpga)}</td>
             <td>${dash(board.last_update)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="9" class="text-muted">No boards match your filters.</td></tr>';
+        : '<tr><td colspan="8" class="text-muted">No boards match your filters.</td></tr>';
     }
 
     const historyBody = document.getElementById("history-body");
@@ -463,7 +566,9 @@
     }
 
     const boardsCount = document.getElementById("boards-count");
-    if (boardsCount) boardsCount.textContent = `${boards.length} board(s)`;
+    if (boardsCount) {
+      boardsCount.textContent = `${boards.length} board(s)${boards.length > 12 ? " · scroll for more" : ""}`;
+    }
 
     const historyCount = document.getElementById("history-count");
     if (historyCount) {
@@ -484,7 +589,8 @@
       productFilters.innerHTML = products.map((item) => {
         const paramsForLink = new URLSearchParams(getParams());
         paramsForLink.set("product", item.product_name);
-        const disabled = firmware && !availableProducts.has(item.product_name) && product !== item.product_name;
+        const disabled = (firmware && !availableProducts.has(item.product_name) && product !== item.product_name)
+          || (tool && !availableProductsForTool.has(item.product_name) && product !== item.product_name);
         if (disabled) {
           return `<span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
             <span>${escapeHtml(item.product_name)}</span>
@@ -505,13 +611,41 @@
       }).join("");
     }
 
+    const toolFilters = document.getElementById("tool-filters");
+    if (toolFilters) {
+      toolFilters.innerHTML = toolList.map((item) => {
+        const paramsForLink = new URLSearchParams(getParams());
+        paramsForLink.set("tool", item.tool);
+        const disabled = (product && !availableTools.has(item.tool) && tool !== item.tool)
+          || (firmware && !availableTools.has(item.tool) && tool !== item.tool);
+        if (disabled) {
+          return `<span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
+            <span>${escapeHtml(item.tool)}</span>
+            <span class="badge text-bg-secondary rounded-pill">${item.board_count}</span>
+          </span>`;
+        }
+        if (tool === item.tool) {
+          paramsForLink.delete("tool");
+          return `<a class="list-group-item list-group-item-action d-flex justify-content-between py-2 active" href="?${paramsForLink.toString()}">
+            <span>${escapeHtml(item.tool)}</span>
+            <span class="badge text-bg-light rounded-pill">${item.board_count}</span>
+          </a>`;
+        }
+        return `<a class="list-group-item list-group-item-action d-flex justify-content-between py-2" href="?${paramsForLink.toString()}">
+          <span>${escapeHtml(item.tool)}</span>
+          <span class="badge text-bg-secondary rounded-pill">${item.board_count}</span>
+        </a>`;
+      }).join("");
+    }
+
     const firmwareFilters = document.getElementById("firmware-filters");
     if (firmwareFilters) {
       firmwareFilters.innerHTML = fwStats.length
         ? fwStats.map((row) => {
           const paramsForLink = new URLSearchParams(getParams());
           paramsForLink.set("firmware", row.firmware);
-          const disabled = product && !availableFirmware.has(row.firmware) && firmware !== row.firmware;
+          const disabled = (product && !availableFirmware.has(row.firmware) && firmware !== row.firmware)
+            || (tool && !availableFirmwareForTool.has(row.firmware) && firmware !== row.firmware);
           if (disabled) {
             return `<span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
               <span><code class="small">${escapeHtml(row.firmware)}</code></span>
@@ -575,9 +709,10 @@
       ["ID", "board_id"],
       ["Product", "product_name"],
       ["Type", "board_name"],
-      ["Tool", "tool"],
-      ["Slot", "board_slot"],
+      ["Location", "tool"],
       ["Serial", "serial"],
+      ["Inventory SN", "inventory_serial"],
+      ["Status", "status"],
       ["Part Number", "part_number"],
       ["Revision", "revision"],
       ["File ID", "file_id"],
@@ -601,8 +736,9 @@
             <td>${escapeHtml(board.product_name)}</td>
             <td>${escapeHtml(board.board_name)}</td>
             <td>${dash(board.tool)}</td>
-            <td>${dash(board.board_slot)}</td>
             <td>${escapeHtml(board.serial)}</td>
+            <td>${dash(board.inventory_serial)}</td>
+            <td>${dash(board.status)}</td>
             <td>${dash(board.part_number)}</td>
             <td>${dash(board.revision)}</td>
             <td>${dash(board.file_id)}</td>
@@ -610,7 +746,7 @@
             <td>${dash(board.manufacturer)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="11" class="text-muted">No boards match your search.</td></tr>';
+        : '<tr><td colspan="12" class="text-muted">No boards match your search.</td></tr>';
     }
 
     const count = document.getElementById("hardware-count");
@@ -665,6 +801,16 @@
       [boardId],
     );
 
+    const events = runSelect(
+      `
+      SELECT *
+      FROM board_events
+      WHERE board_id = ?
+      ORDER BY event_date DESC, COALESCE(event_time, '00:00:00') DESC, event_id DESC
+      `,
+      [boardId],
+    );
+
     const title = document.getElementById("board-title");
     if (title) title.textContent = `${board.product_name} ${board.board_name}`;
     const subtitle = document.getElementById("board-subtitle");
@@ -675,19 +821,50 @@
       const fields = [
         ["Product", board.product_name],
         ["Board type", board.board_name],
-        ["Tool", board.tool],
-        ["Slot", board.board_slot],
+        ["Location", board.tool],
         ["Serial", board.serial],
+        ["Inventory serial", board.inventory_serial],
+        ["Status", board.status],
+        ["Role", board.role],
         ["Part number", board.part_number],
         ["Revision", board.revision],
         ["File ID", board.file_id],
         ["DDR FBGA", board.ddr_fbga],
         ["Manufacturer", board.manufacturer],
       ];
+      if (board.dc_status || board.ac_status || board.gcal_status || board.adc_status || board.eeprom_status) {
+        const testParts = [];
+        if (board.dc_status) testParts.push(`DC: ${board.dc_status}`);
+        if (board.ac_status) testParts.push(`AC: ${board.ac_status}`);
+        if (board.gcal_status) testParts.push(`GCAL: ${board.gcal_status}`);
+        if (board.adc_status) testParts.push(`ADC: ${board.adc_status}`);
+        if (board.eeprom_status) testParts.push(`EEPROM: ${board.eeprom_status}`);
+        fields.push(["Test status", testParts.join(" · ")]);
+      }
+      if (board.comment) fields.push(["Comment", board.comment]);
+      if (board.data_source) fields.push(["Data source", board.data_source]);
       info.innerHTML = fields.map(([label, value]) => `
         <dt class="col-sm-4">${escapeHtml(label)}</dt>
         <dd class="col-sm-8">${dash(value)}</dd>
       `).join("");
+    }
+
+    const eventsSection = document.getElementById("board-events-section");
+    const eventsBody = document.getElementById("board-events-body");
+    if (eventsSection && eventsBody) {
+      if (events.length) {
+        eventsSection.classList.remove("d-none");
+        eventsBody.innerHTML = events.map((row) => `
+          <tr>
+            <td>${escapeHtml(row.event_date)}${row.event_time ? ` ${escapeHtml(row.event_time)}` : ""}</td>
+            <td>${escapeHtml(row.event_type)}</td>
+            <td>${escapeHtml(row.description)}</td>
+            <td>${dash(row.tool)}</td>
+          </tr>
+        `).join("");
+      } else {
+        eventsSection.classList.add("d-none");
+      }
     }
 
     const historyBody = document.getElementById("board-history-body");

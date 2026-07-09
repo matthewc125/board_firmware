@@ -61,6 +61,7 @@ def favicon():
 def index():
     product = request.args.get("product")
     firmware = request.args.get("firmware")
+    tool = request.args.get("tool")
     search = request.args.get("q", "").strip()
     sort = request.args.get("sort", "board_id")
     order = request.args.get("order", "asc")
@@ -69,6 +70,7 @@ def index():
         boards=db.list_boards(
             product_name=product,
             firmware=firmware,
+            tool=tool,
             search=search,
             sort=sort,
             order=order,
@@ -76,15 +78,25 @@ def index():
         history=db.list_history(
             product_name=product,
             firmware=firmware,
+            tool=tool,
             search=search,
         ),
         stats=db.dashboard_stats(),
         fw_stats=db.firmware_stats(),
+        tool_stats=db.tool_stats(),
         products=db.board_products(),
         available_firmware=db.firmware_for_product(product) if product else set(),
         available_products=db.products_for_firmware(firmware) if firmware else set(),
+        available_tools=(
+            db.tools_for_product(product) if product
+            else db.tools_for_firmware(firmware) if firmware
+            else set()
+        ),
+        available_products_for_tool=db.products_for_tool(tool) if tool else set(),
+        available_firmware_for_tool=db.firmware_for_tool(tool) if tool else set(),
         product_filter=product,
         firmware_filter=firmware,
+        tool_filter=tool,
         search=search,
         sort=sort,
         order=order,
@@ -174,6 +186,7 @@ def board_detail(board_id):
         "board_detail.html",
         board=board,
         history=db.board_history(board_id),
+        events=db.board_events(board_id),
     )
 
 
@@ -423,6 +436,20 @@ def _board_form_data():
         "file_id": request.form.get("file_id") or None,
         "product_name": request.form["product_name"],
         "ddr_fbga": request.form.get("ddr_fbga") or None,
+        "inventory_serial": request.form.get("inventory_serial") or None,
+        "status": request.form.get("status") or None,
+        "role": request.form.get("role") or None,
+        "comment": request.form.get("comment") or None,
+        "open_item": request.form.get("open_item") or None,
+        "po": request.form.get("po") or None,
+        "modified_by": request.form.get("modified_by") or None,
+        "source_updated_at": request.form.get("source_updated_at") or None,
+        "data_source": request.form.get("data_source") or None,
+        "dc_status": request.form.get("dc_status") or None,
+        "ac_status": request.form.get("ac_status") or None,
+        "gcal_status": request.form.get("gcal_status") or None,
+        "adc_status": request.form.get("adc_status") or None,
+        "eeprom_status": request.form.get("eeprom_status") or None,
     }
 
 

@@ -29,19 +29,62 @@
       <dl class="card-body mb-0 row">
         <dt class="col-sm-4">Product</dt><dd class="col-sm-8">{{ board.product_name }}</dd>
         <dt class="col-sm-4">Board type</dt><dd class="col-sm-8">{{ board.board_name }}</dd>
-        <dt class="col-sm-4">Tool</dt><dd class="col-sm-8">{{ board.tool or '—' }}</dd>
-        <dt class="col-sm-4">Slot</dt><dd class="col-sm-8">{{ board.board_slot or '—' }}</dd>
+        <dt class="col-sm-4">Location</dt><dd class="col-sm-8">{{ board.tool or '—' }}</dd>
         <dt class="col-sm-4">Serial</dt><dd class="col-sm-8">{{ board.serial }}</dd>
+        <dt class="col-sm-4">Inventory serial</dt><dd class="col-sm-8">{{ board.inventory_serial or '—' }}</dd>
+        <dt class="col-sm-4">Status</dt><dd class="col-sm-8">{{ board.status or '—' }}</dd>
+        <dt class="col-sm-4">Role</dt><dd class="col-sm-8">{{ board.role or '—' }}</dd>
         <dt class="col-sm-4">Part number</dt><dd class="col-sm-8">{{ board.part_number or '—' }}</dd>
         <dt class="col-sm-4">Revision</dt><dd class="col-sm-8">{{ board.revision or '—' }}</dd>
         <dt class="col-sm-4">File ID</dt><dd class="col-sm-8">{{ board.file_id or '—' }}</dd>
         <dt class="col-sm-4">DDR FBGA</dt><dd class="col-sm-8">{{ board.ddr_fbga or '—' }}</dd>
         <dt class="col-sm-4">Manufacturer</dt><dd class="col-sm-8">{{ board.manufacturer }}</dd>
+        {% if board.dc_status or board.ac_status or board.gcal_status or board.adc_status or board.eeprom_status %}
+        <dt class="col-sm-4">Test status</dt>
+        <dd class="col-sm-8">
+          {% if board.dc_status %}DC: {{ board.dc_status }}{% endif %}
+          {% if board.ac_status %}{% if board.dc_status %} · {% endif %}AC: {{ board.ac_status }}{% endif %}
+          {% if board.gcal_status %}{% if board.dc_status or board.ac_status %} · {% endif %}GCAL: {{ board.gcal_status }}{% endif %}
+          {% if board.adc_status %}{% if board.dc_status or board.ac_status or board.gcal_status %} · {% endif %}ADC: {{ board.adc_status }}{% endif %}
+          {% if board.eeprom_status %}{% if board.dc_status or board.ac_status or board.gcal_status or board.adc_status %} · {% endif %}EEPROM: {{ board.eeprom_status }}{% endif %}
+        </dd>
+        {% endif %}
+        {% if board.comment %}
+        <dt class="col-sm-4">Comment</dt><dd class="col-sm-8">{{ board.comment }}</dd>
+        {% endif %}
+        {% if board.data_source %}
+        <dt class="col-sm-4">Data source</dt><dd class="col-sm-8">{{ board.data_source }}</dd>
+        {% endif %}
       </dl>
     </div>
   </div>
 
   <div class="col-md-7">
+    {% if events %}
+    <h2 class="h5">Board Events</h2>
+    <div class="table-responsive mb-4">
+      <table class="table table-sm table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Tool</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in events %}
+          <tr>
+            <td>{{ row.event_date }}{% if row.event_time %} {{ row.event_time }}{% endif %}</td>
+            <td>{{ row.event_type }}</td>
+            <td>{{ row.description }}</td>
+            <td>{{ row.tool or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
     <h2 class="h5">Firmware History</h2>
     <div class="table-responsive">
       <table class="table table-sm table-hover align-middle">

@@ -7,15 +7,19 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
   <div>
     <h1 class="h3 mb-1">Board Firmware Log</h1>
-    {% if product_filter or firmware_filter %}
+    {% if product_filter or firmware_filter or tool_filter %}
     <p class="text-muted mb-0">
       Filtered:
       {% if product_filter %}
-      <a href="{{ url_for('index', firmware=firmware_filter, q=search) }}"
+      <a href="{{ url_for('index', firmware=firmware_filter, tool=tool_filter, q=search) }}"
          class="badge text-bg-primary text-decoration-none" title="Click to remove">{{ product_filter }} ×</a>
       {% endif %}
+      {% if tool_filter %}
+      <a href="{{ url_for('index', product=product_filter, firmware=firmware_filter, q=search) }}"
+         class="badge text-bg-primary text-decoration-none" title="Click to remove">{{ tool_filter }} ×</a>
+      {% endif %}
       {% if firmware_filter %}
-      <a href="{{ url_for('index', product=product_filter, q=search) }}"
+      <a href="{{ url_for('index', product=product_filter, tool=tool_filter, q=search) }}"
          class="badge text-bg-primary text-decoration-none" title="Click to remove"><code class="text-white">{{ firmware_filter }}</code> ×</a>
       {% endif %}
       <a href="{{ url_for('index', q=search) }}" class="small ms-1">Clear filters</a>
@@ -25,7 +29,8 @@
   <form id="search-form" action="{{ url_for('index') }}" method="get" class="d-flex gap-2">
     {% if product_filter %}<input type="hidden" name="product" value="{{ product_filter }}">{% endif %}
     {% if firmware_filter %}<input type="hidden" name="firmware" value="{{ firmware_filter }}">{% endif %}
-    <input type="search" id="board-search" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search ID, tool, serial, part number, revision, DDR…">
+    {% if tool_filter %}<input type="hidden" name="tool" value="{{ tool_filter }}">{% endif %}
+    <input type="search" id="board-search" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search ID, tool, serial, part number…">
     <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
   </form>
 </div>
@@ -34,19 +39,18 @@
   <div class="col-lg-9">
     <h2 class="h5">Current Firmware</h2>
 
-    <div class="table-responsive mb-4">
-      <table class="table table-sm table-hover align-middle">
+    <div class="table-scroll-panel mb-4">
+      <table class="table table-sm table-hover align-middle mb-0">
         <thead>
           <tr>
-            <th>{{ sort_link('ID', 'board_id', sort, order, product_filter, firmware_filter, search) }}</th>
-            <th>{{ sort_link('Product', 'product_name', sort, order, product_filter, firmware_filter, search) }}</th>
-            <th>{{ sort_link('Type', 'board_name', sort, order, product_filter, firmware_filter, search) }}</th>
-            <th>{{ sort_link('Tool', 'tool', sort, order, product_filter, firmware_filter, search) }}</th>
-            <th>Slot</th>
-            <th>{{ sort_link('Serial', 'serial', sort, order, product_filter, firmware_filter, search) }}</th>
-            <th>{{ sort_link('Firmware', 'firmware', sort, order, product_filter, firmware_filter, search) }}</th>
+            <th>{{ sort_link('ID', 'board_id', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th>{{ sort_link('Product', 'product_name', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th>{{ sort_link('Type', 'board_name', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th>{{ sort_link('Location', 'tool', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th>{{ sort_link('Serial', 'serial', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th>{{ sort_link('Firmware', 'firmware', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
             <th>FPGA</th>
-            <th>{{ sort_link('Updated', 'event_date', sort, order, product_filter, firmware_filter, search) }}</th>
+            <th>{{ sort_link('Updated', 'event_date', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
           </tr>
         </thead>
         <tbody>
@@ -56,19 +60,18 @@
             <td>{{ b.product_name }}</td>
             <td>{{ b.board_name }}</td>
             <td>{{ b.tool or '—' }}</td>
-            <td>{{ b.board_slot or '—' }}</td>
             <td>{{ b.serial }}</td>
             <td>{% if b.current_firmware %}<code>{{ b.current_firmware }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
             <td>{{ b.current_fpga or '—' }}</td>
             <td>{{ b.last_update or '—' }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="9" class="text-muted">No boards match your filters.</td></tr>
+          <tr><td colspan="8" class="text-muted">No boards match your filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    <p class="text-muted small">{{ boards|length }} board(s)</p>
+    <p class="text-muted small">{{ boards|length }} board(s){% if boards|length > 12 %} · scroll for more{% endif %}</p>
 
     <h2 class="h5 mt-4">Firmware History</h2>
     <div class="table-scroll-panel">
@@ -77,7 +80,7 @@
           <tr>
             <th>Date</th>
             <th>Board</th>
-            <th>Tool</th>
+            <th>Location</th>
             <th>Firmware</th>
             <th>FPGA</th>
             <th>Installer</th>
@@ -120,22 +123,46 @@
     <h2 class="h6">Board Types</h2>
     <div class="list-group mb-4">
       {% for p in products %}
-      {% if firmware_filter and p.product_name not in available_products and product_filter != p.product_name %}
+      {% if (firmware_filter and p.product_name not in available_products and product_filter != p.product_name) or (tool_filter and p.product_name not in available_products_for_tool and product_filter != p.product_name) %}
       <span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
         <span>{{ p.product_name }}</span>
         <span class="badge text-bg-secondary rounded-pill">{{ p.board_count }}</span>
       </span>
       {% elif product_filter == p.product_name %}
       <a class="list-group-item list-group-item-action d-flex justify-content-between py-2 active"
-         href="{{ url_for('index', firmware=firmware_filter, q=search) }}">
+         href="{{ url_for('index', firmware=firmware_filter, tool=tool_filter, q=search) }}">
         <span>{{ p.product_name }}</span>
         <span class="badge text-bg-light rounded-pill">{{ p.board_count }}</span>
       </a>
       {% else %}
       <a class="list-group-item list-group-item-action d-flex justify-content-between py-2"
-         href="{{ url_for('index', product=p.product_name, firmware=firmware_filter, q=search) }}">
+         href="{{ url_for('index', product=p.product_name, firmware=firmware_filter, tool=tool_filter, q=search) }}">
         <span>{{ p.product_name }}</span>
         <span class="badge text-bg-secondary rounded-pill">{{ p.board_count }}</span>
+      </a>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <h2 class="h6">Location</h2>
+    <div class="list-group mb-4">
+      {% for row in tool_stats %}
+      {% if (product_filter and row.tool not in available_tools and tool_filter != row.tool) or (firmware_filter and row.tool not in available_tools and tool_filter != row.tool) %}
+      <span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
+        <span>{{ row.tool }}</span>
+        <span class="badge text-bg-secondary rounded-pill">{{ row.board_count }}</span>
+      </span>
+      {% elif tool_filter == row.tool %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between py-2 active"
+         href="{{ url_for('index', product=product_filter, firmware=firmware_filter, q=search) }}">
+        <span>{{ row.tool }}</span>
+        <span class="badge text-bg-light rounded-pill">{{ row.board_count }}</span>
+      </a>
+      {% else %}
+      <a class="list-group-item list-group-item-action d-flex justify-content-between py-2"
+         href="{{ url_for('index', product=product_filter, firmware=firmware_filter, tool=row.tool, q=search) }}">
+        <span>{{ row.tool }}</span>
+        <span class="badge text-bg-secondary rounded-pill">{{ row.board_count }}</span>
       </a>
       {% endif %}
       {% endfor %}
@@ -144,20 +171,20 @@
     <h2 class="h6">Firmware Versions</h2>
     <div class="list-group">
       {% for row in fw_stats %}
-      {% if product_filter and row.firmware not in available_firmware and firmware_filter != row.firmware %}
+      {% if (product_filter and row.firmware not in available_firmware and firmware_filter != row.firmware) or (tool_filter and row.firmware not in available_firmware_for_tool and firmware_filter != row.firmware) %}
       <span class="list-group-item d-flex justify-content-between py-2 filter-disabled" aria-disabled="true">
         <span><code class="small">{{ row.firmware }}</code></span>
         <span class="badge text-bg-secondary rounded-pill">{{ row.board_count }}</span>
       </span>
       {% elif firmware_filter == row.firmware %}
       <a class="list-group-item list-group-item-action d-flex justify-content-between py-2 active"
-         href="{{ url_for('index', product=product_filter, q=search) }}">
+         href="{{ url_for('index', product=product_filter, tool=tool_filter, q=search) }}">
         <span><code class="small">{{ row.firmware }}</code></span>
         <span class="badge text-bg-light rounded-pill">{{ row.board_count }}</span>
       </a>
       {% else %}
       <a class="list-group-item list-group-item-action d-flex justify-content-between py-2"
-         href="{{ url_for('index', firmware=row.firmware, product=product_filter, q=search) }}">
+         href="{{ url_for('index', firmware=row.firmware, product=product_filter, tool=tool_filter, q=search) }}">
         <span><code class="small">{{ row.firmware }}</code></span>
         <span class="badge text-bg-secondary rounded-pill">{{ row.board_count }}</span>
       </a>

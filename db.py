@@ -10,12 +10,39 @@ ARCHIVE_TABLES = frozenset({"deleted_boards", "deleted_firmware_history"})
 BOARD_COLUMNS = (
     "board_id", "tool", "board_slot", "manufacturer", "board_name",
     "serial", "part_number", "revision", "file_id", "product_name", "ddr_fbga",
+    "inventory_serial", "status", "role", "comment", "open_item", "po",
+    "modified_by", "source_updated_at", "data_source",
+    "dc_status", "ac_status", "gcal_status", "adc_status", "eeprom_status",
 )
 
 HISTORY_COLUMNS = (
     "event_id", "board_id", "event_date", "event_time", "fpga",
     "firmware", "installer", "result",
 )
+
+BOARD_EVENT_COLUMNS = (
+    "event_id", "board_id", "event_date", "event_time", "event_type",
+    "description", "tool", "source", "source_ref",
+)
+
+BOARD_INVENTORY_COLUMNS = BOARD_COLUMNS[11:]
+
+NEW_BOARD_COLUMNS_DDL = """
+    inventory_serial  TEXT,
+    status            TEXT,
+    role              TEXT,
+    comment           TEXT,
+    open_item         TEXT,
+    po                TEXT,
+    modified_by       TEXT,
+    source_updated_at TEXT,
+    data_source       TEXT,
+    dc_status         TEXT,
+    ac_status         TEXT,
+    gcal_status       TEXT,
+    adc_status        TEXT,
+    eeprom_status     TEXT
+"""
 
 CURRENT_FIRMWARE_VIEW = """
 DROP VIEW IF EXISTS current_firmware;
@@ -44,18 +71,32 @@ WHERE h.event_id = (
 
 ARCHIVE_TABLES_DDL = """
 CREATE TABLE IF NOT EXISTS deleted_boards (
-    board_id      INTEGER PRIMARY KEY,
-    tool          TEXT,
-    board_slot    TEXT,
-    manufacturer  TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
-    board_name    TEXT NOT NULL,
-    serial        TEXT NOT NULL,
-    part_number   TEXT,
-    revision      TEXT,
-    file_id       TEXT,
-    product_name  TEXT NOT NULL,
-    ddr_fbga      TEXT,
-    deleted_at    TEXT NOT NULL
+    board_id          INTEGER PRIMARY KEY,
+    tool              TEXT,
+    board_slot        TEXT,
+    manufacturer      TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
+    board_name        TEXT NOT NULL,
+    serial            TEXT NOT NULL,
+    part_number       TEXT,
+    revision          TEXT,
+    file_id           TEXT,
+    product_name      TEXT NOT NULL,
+    ddr_fbga          TEXT,
+    inventory_serial  TEXT,
+    status            TEXT,
+    role              TEXT,
+    comment           TEXT,
+    open_item         TEXT,
+    po                TEXT,
+    modified_by       TEXT,
+    source_updated_at TEXT,
+    data_source       TEXT,
+    dc_status         TEXT,
+    ac_status         TEXT,
+    gcal_status       TEXT,
+    adc_status        TEXT,
+    eeprom_status     TEXT,
+    deleted_at        TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS deleted_firmware_history (
@@ -68,6 +109,31 @@ CREATE TABLE IF NOT EXISTS deleted_firmware_history (
     installer   TEXT,
     result      TEXT,
     deleted_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS board_events (
+    event_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    board_id      INTEGER NOT NULL REFERENCES boards (board_id),
+    event_date    TEXT NOT NULL,
+    event_time    TEXT,
+    event_type    TEXT NOT NULL,
+    description   TEXT NOT NULL,
+    tool          TEXT,
+    source        TEXT NOT NULL,
+    source_ref    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS import_runs (
+    run_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_name    TEXT NOT NULL,
+    imported_at    TEXT NOT NULL,
+    file_path      TEXT,
+    rows_read      INTEGER,
+    boards_created INTEGER,
+    boards_updated INTEGER,
+    boards_merged  INTEGER,
+    events_created INTEGER,
+    warnings       TEXT
 );
 """
 
@@ -177,17 +243,31 @@ def _migrate_soft_deleted_rows(conn):
             BOARD_COLUMNS,
             """
             CREATE TABLE boards_new (
-                board_id      INTEGER PRIMARY KEY,
-                tool          TEXT,
-                board_slot    TEXT,
-                manufacturer  TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
-                board_name    TEXT NOT NULL,
-                serial        TEXT NOT NULL,
-                part_number   TEXT,
-                revision      TEXT,
-                file_id       TEXT,
-                product_name  TEXT NOT NULL,
-                ddr_fbga      TEXT
+                board_id          INTEGER PRIMARY KEY,
+                tool              TEXT,
+                board_slot        TEXT,
+                manufacturer      TEXT NOT NULL DEFAULT 'PDF Solutions Inc.',
+                board_name        TEXT NOT NULL,
+                serial            TEXT NOT NULL,
+                part_number       TEXT,
+                revision          TEXT,
+                file_id           TEXT,
+                product_name      TEXT NOT NULL,
+                ddr_fbga          TEXT,
+                inventory_serial  TEXT,
+                status            TEXT,
+                role              TEXT,
+                comment           TEXT,
+                open_item         TEXT,
+                po                TEXT,
+                modified_by       TEXT,
+                source_updated_at TEXT,
+                data_source       TEXT,
+                dc_status         TEXT,
+                ac_status         TEXT,
+                gcal_status       TEXT,
+                adc_status        TEXT,
+                eeprom_status     TEXT
             );
             """,
         )
@@ -214,6 +294,20 @@ def _migrate_soft_deleted_rows(conn):
     conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _migrate_board_inventory_columns(conn):
+    """Add inventory metadata columns to boards and deleted_boards."""
+    for table in ("boards", "deleted_boards"):
+        if not conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone():
+            continue
+        existing = set(_table_columns(conn, table))
+        for col in BOARD_INVENTORY_COLUMNS:
+            if col not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+
+
 def ensure_schema():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
@@ -225,8 +319,22 @@ def ensure_schema():
             conn.execute("ALTER TABLE boards ADD COLUMN revision TEXT")
         _migrate_soft_deleted_rows(conn)
         conn.executescript(ARCHIVE_TABLES_DDL)
+        _migrate_board_inventory_columns(conn)
         migrate_revision_file_id(conn)
         conn.executescript(CURRENT_FIRMWARE_VIEW)
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_boards_inventory_serial
+            ON boards (inventory_serial)
+            WHERE inventory_serial IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_board_events_board_date
+            ON board_events (board_id, event_date)
+            """
+        )
         conn.commit()
     finally:
         conn.close()
@@ -268,6 +376,7 @@ BOARD_SEARCH_COLUMNS = (
     "{a}.tool",
     "{a}.board_slot",
     "{a}.serial",
+    "{a}.inventory_serial",
     "{a}.part_number",
     "{a}.product_name",
     "{a}.board_name",
@@ -275,6 +384,9 @@ BOARD_SEARCH_COLUMNS = (
     "{a}.revision",
     "{a}.file_id",
     "{a}.ddr_fbga",
+    "{a}.status",
+    "{a}.role",
+    "{a}.comment",
 )
 
 
@@ -371,6 +483,80 @@ def products_for_firmware(firmware):
     return {row["product_name"] for row in rows}
 
 
+def tool_stats():
+    return fetch_all(
+        """
+        SELECT COALESCE(tool, '(Unassigned)') AS tool, COUNT(*) AS board_count
+        FROM boards
+        GROUP BY COALESCE(tool, '(Unassigned)')
+        ORDER BY
+            CASE WHEN tool = '(Unassigned)' THEN 1 ELSE 0 END,
+            tool ASC
+        """
+    )
+
+
+def products_for_tool(tool):
+    if tool == "(Unassigned)":
+        rows = fetch_all(
+            "SELECT DISTINCT product_name FROM boards WHERE tool IS NULL"
+        )
+    else:
+        rows = fetch_all(
+            "SELECT DISTINCT product_name FROM boards WHERE tool = ?",
+            (tool,),
+        )
+    return {row["product_name"] for row in rows}
+
+
+def firmware_for_tool(tool):
+    if tool == "(Unassigned)":
+        rows = fetch_all(
+            """
+            SELECT DISTINCT cf.firmware
+            FROM current_firmware cf
+            JOIN boards b ON b.board_id = cf.board_id
+            WHERE b.tool IS NULL AND cf.firmware IS NOT NULL
+            """
+        )
+    else:
+        rows = fetch_all(
+            """
+            SELECT DISTINCT cf.firmware
+            FROM current_firmware cf
+            JOIN boards b ON b.board_id = cf.board_id
+            WHERE b.tool = ? AND cf.firmware IS NOT NULL
+            """,
+            (tool,),
+        )
+    return {row["firmware"] for row in rows}
+
+
+def tools_for_product(product_name):
+    rows = fetch_all(
+        """
+        SELECT DISTINCT COALESCE(tool, '(Unassigned)') AS tool
+        FROM boards
+        WHERE product_name = ?
+        """,
+        (product_name,),
+    )
+    return {row["tool"] for row in rows}
+
+
+def tools_for_firmware(firmware):
+    rows = fetch_all(
+        """
+        SELECT DISTINCT COALESCE(b.tool, '(Unassigned)') AS tool
+        FROM current_firmware cf
+        JOIN boards b ON b.board_id = cf.board_id
+        WHERE cf.firmware = ?
+        """,
+        (firmware,),
+    )
+    return {row["tool"] for row in rows}
+
+
 def board_types():
     return fetch_all(
         """
@@ -385,7 +571,7 @@ def board_types():
     )
 
 
-def list_boards(product_name=None, board_name=None, firmware=None, search=None, sort="board_id", order="asc"):
+def list_boards(product_name=None, board_name=None, firmware=None, tool=None, search=None, sort="board_id", order="asc"):
     allowed_sort = {
         "board_id": "b.board_id",
         "tool": "b.tool",
@@ -410,6 +596,12 @@ def list_boards(product_name=None, board_name=None, firmware=None, search=None, 
     if firmware:
         clauses.append("cf.firmware = ?")
         params.append(firmware)
+    if tool:
+        if tool == "(Unassigned)":
+            clauses.append("b.tool IS NULL")
+        else:
+            clauses.append("b.tool = ?")
+            params.append(tool)
     search_clause, search_params = _board_search_clause(search, "b", ["cf.firmware"])
     if search_clause:
         clauses.append(search_clause)
@@ -423,7 +615,7 @@ def list_boards(product_name=None, board_name=None, firmware=None, search=None, 
             b.*,
             cf.firmware AS current_firmware,
             cf.fpga AS current_fpga,
-            cf.event_date AS last_update
+            COALESCE(cf.event_date, b.source_updated_at) AS last_update
         FROM boards b
         LEFT JOIN current_firmware cf ON cf.board_id = b.board_id
         {where}
@@ -441,6 +633,8 @@ def list_hardware(search=None, sort="board_id", order="asc"):
         "board_name": "board_name",
         "product_name": "product_name",
         "serial": "serial",
+        "inventory_serial": "inventory_serial",
+        "status": "status",
         "part_number": "part_number",
         "revision": "revision",
         "file_id": "file_id",
@@ -488,6 +682,28 @@ def board_history(board_id):
         ORDER BY event_date DESC, COALESCE(event_time, '00:00:00') DESC, event_id DESC
         """,
         (board_id,),
+    )
+
+
+def board_events(board_id):
+    return fetch_all(
+        """
+        SELECT *
+        FROM board_events
+        WHERE board_id = ?
+        ORDER BY event_date DESC, COALESCE(event_time, '00:00:00') DESC, event_id DESC
+        """,
+        (board_id,),
+    )
+
+
+def insert_board_event(data):
+    cols = [c for c in BOARD_EVENT_COLUMNS if c != "event_id"]
+    placeholders = ", ".join("?" for _ in cols)
+    values = [data.get(c) for c in cols]
+    return execute(
+        f"INSERT INTO board_events ({', '.join(cols)}) VALUES ({placeholders})",
+        values,
     )
 
 
@@ -683,7 +899,7 @@ def next_board_id():
     return row["next_id"]
 
 
-def list_history(product_name=None, firmware=None, search=None, limit=None):
+def list_history(product_name=None, firmware=None, tool=None, search=None, limit=None):
     clauses = []
     params = []
 
@@ -693,6 +909,12 @@ def list_history(product_name=None, firmware=None, search=None, limit=None):
     if firmware:
         clauses.append("h.firmware = ?")
         params.append(firmware)
+    if tool:
+        if tool == "(Unassigned)":
+            clauses.append("b.tool IS NULL")
+        else:
+            clauses.append("b.tool = ?")
+            params.append(tool)
     search_clause, search_params = _board_search_clause(search, "b", ["h.firmware"])
     if search_clause:
         clauses.append(search_clause)

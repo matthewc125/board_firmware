@@ -168,9 +168,11 @@ def import_xlsm(xlsm_path: str, db_path: str, schema_path: str) -> None:
         board_cols = [
             "board_id", "tool", "board_slot", "manufacturer", "board_name",
             "serial", "part_number", "revision", "file_id", "product_name", "ddr_fbga",
+            "data_source",
         ]
         for _, row in boards_df.iterrows():
             record = board_row_from_xlsm(row)
+            record["data_source"] = "firmware_log"
             conn.execute(
                 f"INSERT INTO boards ({', '.join(board_cols)}) "
                 f"VALUES ({', '.join('?' for _ in board_cols)})",
