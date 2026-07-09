@@ -770,6 +770,54 @@ def delete_history(event_id):
         return cur.rowcount
 
 
+def renumber_boards():
+    """Renumber active boards to sequential IDs starting at 1."""
+    temp_offset = 1_000_000
+    child_tables = ("firmware_history", "board_events")
+    with get_db() as conn:
+        board_ids = [
+            row["board_id"]
+            for row in conn.execute("SELECT board_id FROM boards ORDER BY board_id").fetchall()
+        ]
+        if not board_ids:
+            return {"renumbered": 0, "mapping": {}}
+
+        mapping = {
+            old_id: new_id
+            for new_id, old_id in enumerate(board_ids, start=1)
+        }
+        if all(old_id == new_id for old_id, new_id in mapping.items()):
+            return {"renumbered": 0, "mapping": mapping}
+
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            for old_id, new_id in mapping.items():
+                temp_id = temp_offset + new_id
+                for table in child_tables:
+                    conn.execute(
+                        f"UPDATE {table} SET board_id = ? WHERE board_id = ?",
+                        (temp_id, old_id),
+                    )
+                conn.execute(
+                    "UPDATE boards SET board_id = ? WHERE board_id = ?",
+                    (temp_id, old_id),
+                )
+
+            for new_id in range(1, len(board_ids) + 1):
+                temp_id = temp_offset + new_id
+                for table in (*child_tables, "boards"):
+                    conn.execute(
+                        f"UPDATE {table} SET board_id = ? WHERE board_id = ?",
+                        (new_id, temp_id),
+                    )
+            conn.commit()
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.commit()
+
+        return {"renumbered": len(mapping), "mapping": mapping}
+
+
 def delete_board(board_id):
     ts = _utc_now()
     with get_db() as conn:
@@ -794,6 +842,7 @@ def delete_board(board_id):
                 [event[col] for col in HISTORY_COLUMNS] + [ts],
             )
         conn.execute("DELETE FROM firmware_history WHERE board_id = ?", (board_id,))
+        conn.execute("DELETE FROM board_events WHERE board_id = ?", (board_id,))
         cur = conn.execute("DELETE FROM boards WHERE board_id = ?", (board_id,))
         conn.commit()
         return cur.rowcount

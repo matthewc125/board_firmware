@@ -238,6 +238,103 @@ def classify_event_type(description: str) -> str:
     return "note"
 
 
+def is_scrapped_status(status: str | None) -> bool:
+    text = clean_text(status)
+    return text is not None and text.lower() == "scrapped"
+
+
+def load_strikethrough_keys(etr_path: str | None, pico_path: str | None) -> set[str]:
+    """Return normalized inventory serial keys for strikethrough rows in source spreadsheets."""
+    from openpyxl import load_workbook
+
+    keys: set[str] = set()
+    if etr_path:
+        wb = load_workbook(etr_path, data_only=True)
+        ws = wb.active
+        headers = [clean_text(c.value) for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        col = {h: i for i, h in enumerate(headers) if h}
+        for row in ws.iter_rows(min_row=2):
+            if not any(c.value for c in row):
+                continue
+            strike = any(c.font and c.font.strike for c in row if c.value is not None)
+            if not strike:
+                continue
+            etr_type = clean_text(row[col["Type"]].value if "Type" in col else None) or "Unknown"
+            sn = clean_text(row[col["SN"]].value if "SN" in col else None)
+            if sn:
+                keys.add(normalize_inventory_serial(f"{etr_type}:{sn}") or "")
+                keys.add(normalize_inventory_serial(sn) or "")
+        wb.close()
+    if pico_path:
+        wb = load_workbook(pico_path, data_only=True)
+        ws = wb.active
+        headers = [clean_text(c.value) for c in next(ws.iter_rows(min_row=1, max_row=1))]
+        col = {h: i for i, h in enumerate(headers) if h}
+        for row in ws.iter_rows(min_row=2):
+            if not any(c.value for c in row):
+                continue
+            strike = any(c.font and c.font.strike for c in row if c.value is not None)
+            if not strike:
+                continue
+            sn = clean_text(row[col["SN"]].value if "SN" in col else None)
+            if sn:
+                keys.add(normalize_inventory_serial(sn) or "")
+        wb.close()
+    keys.discard("")
+    return keys
+
+
+def board_matches_strikethrough(inventory_serial: str | None, strike_keys: set[str]) -> bool:
+    inv = normalize_inventory_serial(inventory_serial)
+    if not inv or not strike_keys:
+        return False
+    if inv in strike_keys:
+        return True
+    if ":" in inv:
+        suffix = inv.split(":", 1)[1]
+        return suffix in strike_keys
+    return False
+
+
+def etr_row_excluded(row, strike_keys: set[str]) -> str | None:
+    etr_type = clean_text(row.get("Type")) or "Unknown"
+    sn = clean_text(row.get("SN"))
+    inv = normalize_inventory_serial(f"{etr_type}:{sn}") if sn else None
+    if inv and board_matches_strikethrough(inv, strike_keys):
+        return "strikethrough"
+    if is_scrapped_status(row.get("Status")):
+        return "scrapped"
+    if not clean_text(row.get("Firmware")):
+        return "no_firmware"
+    return None
+
+
+def pico_row_excluded(row, strike_keys: set[str]) -> str | None:
+    sn = clean_text(row.get("SN"))
+    if sn and board_matches_strikethrough(sn, strike_keys):
+        return "strikethrough"
+    return None
+
+
+def board_removal_reasons(
+    conn,
+    board: dict,
+    strike_keys: set[str],
+) -> list[str]:
+    reasons: list[str] = []
+    if board_matches_strikethrough(board.get("inventory_serial"), strike_keys):
+        reasons.append("strikethrough")
+    if is_scrapped_status(board.get("status")):
+        reasons.append("scrapped")
+    fw_count = conn.execute(
+        "SELECT COUNT(*) FROM firmware_history WHERE board_id = ?",
+        (board["board_id"],),
+    ).fetchone()[0]
+    if fw_count == 0:
+        reasons.append("no_firmware")
+    return reasons
+
+
 def parse_pico_status_events(status_text, board_label: str, sn: str) -> list[dict]:
     text = clean_text(status_text)
     if not text:

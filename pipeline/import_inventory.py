@@ -20,7 +20,9 @@ import pandas as pd
 from inventory_normalize import (
     MANUFACTURER,
     clean_text,
+    etr_row_excluded,
     format_revision,
+    load_strikethrough_keys,
     map_etr_type,
     map_pico_board,
     normalize_inventory_serial,
@@ -28,6 +30,7 @@ from inventory_normalize import (
     parse_part_revision,
     parse_pico_status_events,
     pico_match_key,
+    pico_row_excluded,
     short_serial,
     split_datetime,
     split_tool_history,
@@ -310,13 +313,29 @@ def find_pico_board_id(data: dict, by_inventory: dict, by_pico: dict) -> tuple[i
     return None, False
 
 
-def import_electronics(conn, path: str, report: ImportReport, dry_run: bool) -> None:
+def board_has_firmware(conn, board_id: int | None) -> bool:
+    if not board_id:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM firmware_history WHERE board_id = ? LIMIT 1",
+        (board_id,),
+    ).fetchone()
+    return row is not None
+
+
+def import_electronics(
+    conn, path: str, report: ImportReport, dry_run: bool, strike_keys: set[str],
+) -> None:
     df = load_electronics(path)
     by_inventory, by_strong, by_pico = load_board_indexes(conn)
 
     for idx, row in df.iterrows():
         data = etr_row_to_board(row, idx + 2)
         label = f"ETR row {idx + 2} {data['inventory_serial']}"
+        skip = etr_row_excluded(row, strike_keys)
+        if skip:
+            report.skipped.append(f"{label}: {skip}")
+            continue
         inv = normalize_inventory_serial(data["inventory_serial"])
         if not inv:
             report.skipped.append(f"{label}: missing serial")
@@ -349,13 +368,19 @@ def import_electronics(conn, path: str, report: ImportReport, dry_run: bool) -> 
             )
 
 
-def import_pico(conn, path: str, report: ImportReport, dry_run: bool) -> None:
+def import_pico(
+    conn, path: str, report: ImportReport, dry_run: bool, strike_keys: set[str],
+) -> None:
     df = load_pico(path)
     by_inventory, by_strong, by_pico = load_board_indexes(conn)
 
     for idx, row in df.iterrows():
         data = pico_row_to_board(row, idx + 2)
         label = f"Pico row {idx + 2} {data['board_name']} {data['inventory_serial']}"
+        skip = pico_row_excluded(row, strike_keys)
+        if skip:
+            report.skipped.append(f"{label}: {skip}")
+            continue
         status_text = data.pop("_status_text")
         tool_history = data.pop("_tool_history")
         board_family = data.pop("_board_family")
@@ -365,6 +390,9 @@ def import_pico(conn, path: str, report: ImportReport, dry_run: bool) -> None:
         if ambiguous:
             pk = pico_match_key(data.get("part_number"), data.get("inventory_serial"))
             report.ambiguous.append(f"{label}: multiple matches for key {pk}")
+            continue
+        if not board_has_firmware(conn, board_id):
+            report.skipped.append(f"{label}: no_firmware")
             continue
 
         if dry_run:
@@ -426,6 +454,12 @@ def print_report(report: ImportReport, electronics_rows: int, pico_rows: int):
     for key, value in summary.items():
         if key != "warnings":
             print(f"  {key}: {value}")
+    if report.skipped:
+        print(f"\nSkipped ({len(report.skipped)}):")
+        for line in report.skipped[:20]:
+            print(f"  - {line}")
+        if len(report.skipped) > 20:
+            print(f"  ... and {len(report.skipped) - 20} more")
     if report.warnings:
         print("\nWarnings:")
         for w in report.warnings:
@@ -451,12 +485,13 @@ def import_inventory(
     report = ImportReport()
     etr_df = load_electronics(electronics_path)
     pico_df = load_pico(pico_path)
+    strike_keys = load_strikethrough_keys(electronics_path, pico_path)
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        import_electronics(conn, electronics_path, report, dry_run)
-        import_pico(conn, pico_path, report, dry_run)
+        import_electronics(conn, electronics_path, report, dry_run, strike_keys)
+        import_pico(conn, pico_path, report, dry_run, strike_keys)
         if not dry_run:
             record_import_run(conn, "electronics_tracking", electronics_path, len(etr_df), report)
             record_import_run(conn, "pico_list", pico_path, len(pico_df), report)
