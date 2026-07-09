@@ -971,7 +971,8 @@
   }
 
   async function initDatabase() {
-    const response = await fetch(siteUrl("data/board_firmware.db"));
+    const cacheKey = encodeURIComponent(window.SITE_BUILT_AT || String(Date.now()));
+    const response = await fetch(`${siteUrl("data/board_firmware.db")}?v=${cacheKey}`);
     if (!response.ok) {
       throw new Error(`Could not load database (${response.status}).`);
     }
