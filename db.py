@@ -59,6 +59,21 @@ def is_firmware_verified(board) -> bool:
 def firmware_verified_label(board) -> str:
     return "verified" if is_firmware_verified(board) else "unverified"
 
+
+def tool_sort_order_sql(tool_column="tool"):
+    """Sort tools numerically (Tool2 before Tool12); Unassigned last."""
+    return f"""
+    CASE
+        WHEN {tool_column} = 'Unassigned' THEN 3
+        WHEN {tool_column} LIKE 'Tool%' THEN 1
+        ELSE 2
+    END,
+    CASE
+        WHEN {tool_column} LIKE 'Tool%' THEN CAST(SUBSTR({tool_column}, 5) AS INTEGER)
+    END,
+    {tool_column} ASC
+    """
+
 NEW_BOARD_COLUMNS_DDL = """
     inventory_serial  TEXT,
     status            TEXT,
@@ -76,7 +91,7 @@ NEW_BOARD_COLUMNS_DDL = """
     eeprom_status     TEXT
 """
 
-CURRENT_FIRMWARE_VIEW = """
+CURRENT_FIRMWARE_VIEW = f"""
 DROP VIEW IF EXISTS current_firmware;
 CREATE VIEW current_firmware AS
 SELECT
@@ -86,7 +101,8 @@ SELECT
     h.firmware,
     h.fpga,
     h.event_date,
-    h.event_time
+    h.event_time,
+    {firmware_verified_sql("b").strip()} AS firmware_verified
 FROM boards b
 JOIN firmware_history h ON h.board_id = b.board_id
 WHERE h.event_id = (
@@ -517,13 +533,11 @@ def products_for_firmware(firmware):
 
 def tool_stats():
     return fetch_all(
-        """
+        f"""
         SELECT COALESCE(tool, 'Unassigned') AS tool, COUNT(*) AS board_count
         FROM boards
         GROUP BY COALESCE(tool, 'Unassigned')
-        ORDER BY
-            CASE WHEN tool = 'Unassigned' THEN 1 ELSE 0 END,
-            tool ASC
+        ORDER BY {tool_sort_order_sql("tool")}
         """
     )
 

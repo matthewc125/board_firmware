@@ -125,7 +125,13 @@ SELECT
     h.firmware,
     h.fpga,
     h.event_date,
-    h.event_time
+    h.event_time,
+    CASE
+        WHEN b.board_id IN (1, 8) THEN 'verified'
+        WHEN b.data_source = 'firmware_log' THEN 'verified'
+        WHEN b.tool = 'Tool13' AND b.product_name = 'BAP' THEN 'verified'
+        ELSE 'unverified'
+    END AS firmware_verified
 FROM boards b
 JOIN firmware_history h ON h.board_id = b.board_id
 WHERE h.event_id = (

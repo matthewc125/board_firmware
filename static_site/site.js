@@ -418,13 +418,27 @@
     );
   }
 
+  function toolSortOrderSql(toolColumn = "tool") {
+    return `
+      CASE
+        WHEN ${toolColumn} = 'Unassigned' THEN 3
+        WHEN ${toolColumn} LIKE 'Tool%' THEN 1
+        ELSE 2
+      END,
+      CASE
+        WHEN ${toolColumn} LIKE 'Tool%' THEN CAST(SUBSTR(${toolColumn}, 5) AS INTEGER)
+      END,
+      ${toolColumn} ASC
+    `;
+  }
+
   function toolStats() {
     return runSelect(
       `
       SELECT COALESCE(tool, 'Unassigned') AS tool, COUNT(*) AS board_count
       FROM boards
       GROUP BY COALESCE(tool, 'Unassigned')
-      ORDER BY CASE WHEN tool = 'Unassigned' THEN 1 ELSE 0 END, tool ASC
+      ORDER BY ${toolSortOrderSql("tool")}
       `,
     );
   }
