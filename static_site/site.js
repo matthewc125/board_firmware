@@ -236,7 +236,7 @@
       params.push(firmware);
     }
     if (tool) {
-      if (tool === "(Unassigned)") {
+      if (tool === "Unassigned") {
         clauses.push("b.tool IS NULL");
       } else {
         clauses.push("b.tool = ?");
@@ -280,7 +280,7 @@
       params.push(firmware);
     }
     if (tool) {
-      if (tool === "(Unassigned)") {
+      if (tool === "Unassigned") {
         clauses.push("b.tool IS NULL");
       } else {
         clauses.push("b.tool = ?");
@@ -421,23 +421,23 @@
   function toolStats() {
     return runSelect(
       `
-      SELECT COALESCE(tool, '(Unassigned)') AS tool, COUNT(*) AS board_count
+      SELECT COALESCE(tool, 'Unassigned') AS tool, COUNT(*) AS board_count
       FROM boards
-      GROUP BY COALESCE(tool, '(Unassigned)')
-      ORDER BY CASE WHEN tool = '(Unassigned)' THEN 1 ELSE 0 END, tool ASC
+      GROUP BY COALESCE(tool, 'Unassigned')
+      ORDER BY CASE WHEN tool = 'Unassigned' THEN 1 ELSE 0 END, tool ASC
       `,
     );
   }
 
   function productsForTool(tool) {
-    if (tool === "(Unassigned)") {
+    if (tool === "Unassigned") {
       return new Set(runSelect("SELECT DISTINCT product_name FROM boards WHERE tool IS NULL").map((row) => row.product_name));
     }
     return new Set(runSelect("SELECT DISTINCT product_name FROM boards WHERE tool = ?", [tool]).map((row) => row.product_name));
   }
 
   function firmwareForTool(tool) {
-    if (tool === "(Unassigned)") {
+    if (tool === "Unassigned") {
       return new Set(
         runSelect(
           `
@@ -465,7 +465,7 @@
   function toolsForProduct(productName) {
     return new Set(
       runSelect(
-        "SELECT DISTINCT COALESCE(tool, '(Unassigned)') AS tool FROM boards WHERE product_name = ?",
+        "SELECT DISTINCT COALESCE(tool, 'Unassigned') AS tool FROM boards WHERE product_name = ?",
         [productName],
       ).map((row) => row.tool),
     );
@@ -475,7 +475,7 @@
     return new Set(
       runSelect(
         `
-        SELECT DISTINCT COALESCE(b.tool, '(Unassigned)') AS tool
+        SELECT DISTINCT COALESCE(b.tool, 'Unassigned') AS tool
         FROM current_firmware cf
         JOIN boards b ON b.board_id = cf.board_id
         WHERE cf.firmware = ?

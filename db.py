@@ -518,18 +518,18 @@ def products_for_firmware(firmware):
 def tool_stats():
     return fetch_all(
         """
-        SELECT COALESCE(tool, '(Unassigned)') AS tool, COUNT(*) AS board_count
+        SELECT COALESCE(tool, 'Unassigned') AS tool, COUNT(*) AS board_count
         FROM boards
-        GROUP BY COALESCE(tool, '(Unassigned)')
+        GROUP BY COALESCE(tool, 'Unassigned')
         ORDER BY
-            CASE WHEN tool = '(Unassigned)' THEN 1 ELSE 0 END,
+            CASE WHEN tool = 'Unassigned' THEN 1 ELSE 0 END,
             tool ASC
         """
     )
 
 
 def products_for_tool(tool):
-    if tool == "(Unassigned)":
+    if tool == "Unassigned":
         rows = fetch_all(
             "SELECT DISTINCT product_name FROM boards WHERE tool IS NULL"
         )
@@ -542,7 +542,7 @@ def products_for_tool(tool):
 
 
 def firmware_for_tool(tool):
-    if tool == "(Unassigned)":
+    if tool == "Unassigned":
         rows = fetch_all(
             """
             SELECT DISTINCT cf.firmware
@@ -567,7 +567,7 @@ def firmware_for_tool(tool):
 def tools_for_product(product_name):
     rows = fetch_all(
         """
-        SELECT DISTINCT COALESCE(tool, '(Unassigned)') AS tool
+        SELECT DISTINCT COALESCE(tool, 'Unassigned') AS tool
         FROM boards
         WHERE product_name = ?
         """,
@@ -579,7 +579,7 @@ def tools_for_product(product_name):
 def tools_for_firmware(firmware):
     rows = fetch_all(
         """
-        SELECT DISTINCT COALESCE(b.tool, '(Unassigned)') AS tool
+        SELECT DISTINCT COALESCE(b.tool, 'Unassigned') AS tool
         FROM current_firmware cf
         JOIN boards b ON b.board_id = cf.board_id
         WHERE cf.firmware = ?
@@ -629,7 +629,7 @@ def list_boards(product_name=None, board_name=None, firmware=None, tool=None, se
         clauses.append("cf.firmware = ?")
         params.append(firmware)
     if tool:
-        if tool == "(Unassigned)":
+        if tool == "Unassigned":
             clauses.append("b.tool IS NULL")
         else:
             clauses.append("b.tool = ?")
@@ -994,7 +994,7 @@ def list_history(product_name=None, firmware=None, tool=None, search=None, limit
         clauses.append("h.firmware = ?")
         params.append(firmware)
     if tool:
-        if tool == "(Unassigned)":
+        if tool == "Unassigned":
             clauses.append("b.tool IS NULL")
         else:
             clauses.append("b.tool = ?")
