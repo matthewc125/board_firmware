@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import sort_link, result_badge %}
+{% from "macros.html" import sort_link, result_badge, verified_badge %}
 
 {% block title %}Board Firmware Log{% endblock %}
 
@@ -48,7 +48,8 @@
             <th>{{ sort_link('Type', 'board_name', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
             <th>{{ sort_link('Location', 'tool', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
             <th>{{ sort_link('Serial', 'serial', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
-            <th>{{ sort_link('Firmware', 'firmware', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th class="col-firmware">{{ sort_link('Firmware', 'firmware', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
+            <th class="col-verified">Verified</th>
             <th>FPGA</th>
             <th>{{ sort_link('Updated', 'event_date', sort, order, product_filter, firmware_filter, tool_filter, search) }}</th>
           </tr>
@@ -61,12 +62,13 @@
             <td>{{ b.board_name }}</td>
             <td>{{ b.tool or '—' }}</td>
             <td>{{ b.serial }}</td>
-            <td>{% if b.current_firmware %}<code>{{ b.current_firmware }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="col-firmware">{% if b.current_firmware %}<code>{{ b.current_firmware }}</code>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="col-verified">{{ verified_badge(b.firmware_verified) }}</td>
             <td>{{ b.current_fpga or '—' }}</td>
             <td>{{ b.last_update or '—' }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="text-muted">No boards match your filters.</td></tr>
+          <tr><td colspan="9" class="text-muted">No boards match your filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -81,7 +83,8 @@
             <th>Date</th>
             <th>Board</th>
             <th>Location</th>
-            <th>Firmware</th>
+            <th class="col-firmware">Firmware</th>
+            <th class="col-verified">Verified</th>
             <th>FPGA</th>
             <th>Installer</th>
             <th>Result</th>
@@ -97,13 +100,14 @@
               </a>
             </td>
             <td>{{ row.tool or '—' }}</td>
-            <td><code>{{ row.firmware }}</code></td>
+            <td class="col-firmware"><code>{{ row.firmware }}</code></td>
+            <td class="col-verified">{{ verified_badge(row.firmware_verified) }}</td>
             <td>{{ row.fpga or '—' }}</td>
             <td>{{ row.installer or '—' }}</td>
             <td>{{ result_badge(row.result) }}</td>
           </tr>
           {% else %}
-          <tr><td colspan="7" class="text-muted">No firmware history matches your filters.</td></tr>
+          <tr><td colspan="8" class="text-muted">No firmware history matches your filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>

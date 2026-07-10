@@ -50,10 +50,27 @@ code {
   background-color: #fff;
 }
 
+.table-scroll-panel th.col-firmware,
+.table-scroll-panel td.col-firmware,
+.table-scroll-panel th.col-verified,
+.table-scroll-panel td.col-verified {
+  white-space: nowrap;
+}
+
+.table-scroll-panel th.col-verified,
+.table-scroll-panel td.col-verified {
+  min-width: 6.5rem;
+}
+
 .table-scroll-panel thead th {
   position: sticky;
   top: 0;
   z-index: 1;
   background-color: #fff;
   box-shadow: inset 0 -1px 0 var(--bs-border-color);
+}
+
+.table-scroll-panel thead th.col-firmware,
+.table-scroll-panel thead th.col-verified {
+  z-index: 3;
 }

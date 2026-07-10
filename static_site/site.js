@@ -71,6 +71,37 @@
     return `<span class="badge text-bg-secondary">${escapeHtml(result)}</span>`;
   }
 
+  const VERIFIED_BOARD_IDS = new Set([1, 8]);
+
+  function firmwareVerifiedSql(boardAlias = "b") {
+    return `
+      CASE
+        WHEN ${boardAlias}.board_id IN (1, 8) THEN 'verified'
+        WHEN ${boardAlias}.data_source = 'firmware_log' THEN 'verified'
+        WHEN ${boardAlias}.tool = 'Tool13' AND ${boardAlias}.product_name = 'BAP' THEN 'verified'
+        ELSE 'unverified'
+      END
+    `;
+  }
+
+  function verifiedBadge(status) {
+    if (status === "verified") {
+      return '<span class="badge text-bg-success">Verified</span>';
+    }
+    if (status === "unverified") {
+      return '<span class="badge text-bg-warning text-dark">Unverified</span>';
+    }
+    return '<span class="text-muted">—</span>';
+  }
+
+  function boardFirmwareVerified(board) {
+    if (!board) return "unverified";
+    if (VERIFIED_BOARD_IDS.has(board.board_id)) return "verified";
+    if (board.data_source === "firmware_log") return "verified";
+    if (board.tool === "Tool13" && board.product_name === "BAP") return "verified";
+    return "unverified";
+  }
+
   function queryTokens(upperSql) {
     return new Set(upperSql.match(/[A-Z_][A-Z0-9_]*/g) || []);
   }
@@ -225,7 +256,8 @@
         b.*,
         cf.firmware AS current_firmware,
         cf.fpga AS current_fpga,
-        COALESCE(cf.event_date, b.source_updated_at) AS last_update
+        COALESCE(cf.event_date, b.source_updated_at) AS last_update,
+        ${firmwareVerifiedSql("b")} AS firmware_verified
       FROM boards b
       LEFT JOIN current_firmware cf ON cf.board_id = b.board_id
       ${where}
@@ -276,7 +308,8 @@
         b.board_name,
         b.product_name,
         b.tool,
-        b.serial
+        b.serial,
+        ${firmwareVerifiedSql("b")} AS firmware_verified
       FROM firmware_history h
       JOIN boards b ON b.board_id = h.board_id
       ${where}
@@ -519,15 +552,16 @@
     const head = document.getElementById("boards-head");
     if (head) {
       head.innerHTML = [
-        sortLink("ID", "board_id", sort, order, linkParams),
-        sortLink("Product", "product_name", sort, order, linkParams),
-        sortLink("Type", "board_name", sort, order, linkParams),
-        sortLink("Location", "tool", sort, order, linkParams),
-        sortLink("Serial", "serial", sort, order, linkParams),
-        sortLink("Firmware", "firmware", sort, order, linkParams),
-        "FPGA",
-        sortLink("Updated", "event_date", sort, order, linkParams),
-      ].map((cell) => `<th>${cell}</th>`).join("");
+        `<th>${sortLink("ID", "board_id", sort, order, linkParams)}</th>`,
+        `<th>${sortLink("Product", "product_name", sort, order, linkParams)}</th>`,
+        `<th>${sortLink("Type", "board_name", sort, order, linkParams)}</th>`,
+        `<th>${sortLink("Location", "tool", sort, order, linkParams)}</th>`,
+        `<th>${sortLink("Serial", "serial", sort, order, linkParams)}</th>`,
+        `<th class="col-firmware">${sortLink("Firmware", "firmware", sort, order, linkParams)}</th>`,
+        '<th class="col-verified">Verified</th>',
+        "<th>FPGA</th>",
+        `<th>${sortLink("Updated", "event_date", sort, order, linkParams)}</th>`,
+      ].join("");
     }
 
     const boardsBody = document.getElementById("boards-body");
@@ -540,12 +574,13 @@
             <td>${escapeHtml(board.board_name)}</td>
             <td>${dash(board.tool)}</td>
             <td>${escapeHtml(board.serial)}</td>
-            <td>${board.current_firmware ? `<code>${escapeHtml(board.current_firmware)}</code>` : '<span class="text-muted">—</span>'}</td>
+            <td class="col-firmware">${board.current_firmware ? `<code>${escapeHtml(board.current_firmware)}</code>` : '<span class="text-muted">—</span>'}</td>
+            <td class="col-verified">${verifiedBadge(board.firmware_verified)}</td>
             <td>${dash(board.current_fpga)}</td>
             <td>${dash(board.last_update)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="8" class="text-muted">No boards match your filters.</td></tr>';
+        : '<tr><td colspan="9" class="text-muted">No boards match your filters.</td></tr>';
     }
 
     const historyBody = document.getElementById("history-body");
@@ -556,13 +591,14 @@
             <td>${escapeHtml(row.event_date)}</td>
             <td><a href="${boardUrl(row.board_id)}">${escapeHtml(row.product_name)} ${escapeHtml(row.board_name)}</a></td>
             <td>${dash(row.tool)}</td>
-            <td><code>${escapeHtml(row.firmware)}</code></td>
+            <td class="col-firmware"><code>${escapeHtml(row.firmware)}</code></td>
+            <td class="col-verified">${verifiedBadge(row.firmware_verified)}</td>
             <td>${dash(row.fpga)}</td>
             <td>${dash(row.installer)}</td>
             <td>${resultBadge(row.result)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="7" class="text-muted">No firmware history matches your filters.</td></tr>';
+        : '<tr><td colspan="8" class="text-muted">No firmware history matches your filters.</td></tr>';
     }
 
     const boardsCount = document.getElementById("boards-count");
@@ -867,6 +903,8 @@
       }
     }
 
+    const boardVerified = boardFirmwareVerified(board);
+
     const historyBody = document.getElementById("board-history-body");
     if (historyBody) {
       historyBody.innerHTML = history.length
@@ -874,12 +912,13 @@
           <tr>
             <td>${escapeHtml(row.event_date)}${row.event_time ? ` ${escapeHtml(row.event_time)}` : ""}</td>
             <td>${dash(row.fpga)}</td>
-            <td><code>${escapeHtml(row.firmware)}</code></td>
+            <td class="col-firmware"><code>${escapeHtml(row.firmware)}</code></td>
+            <td class="col-verified">${verifiedBadge(boardVerified)}</td>
             <td>${dash(row.installer)}</td>
             <td>${resultBadge(row.result)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="5" class="text-muted">No firmware history for this board.</td></tr>';
+        : '<tr><td colspan="6" class="text-muted">No firmware history for this board.</td></tr>';
     }
   }
 

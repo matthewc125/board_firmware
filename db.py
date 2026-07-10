@@ -27,6 +27,38 @@ BOARD_EVENT_COLUMNS = (
 
 BOARD_INVENTORY_COLUMNS = BOARD_COLUMNS[11:]
 
+# Boards verified despite merged/imported data_source (original log + known-good BAP).
+VERIFIED_BOARD_IDS = frozenset({1, 8})
+
+
+def firmware_verified_sql(board_alias="b"):
+    """SQL expression for firmware verification status."""
+    ids = ", ".join(str(i) for i in sorted(VERIFIED_BOARD_IDS))
+    return f"""
+    CASE
+        WHEN {board_alias}.board_id IN ({ids}) THEN 'verified'
+        WHEN {board_alias}.data_source = 'firmware_log' THEN 'verified'
+        WHEN {board_alias}.tool = 'Tool13' AND {board_alias}.product_name = 'BAP' THEN 'verified'
+        ELSE 'unverified'
+    END
+    """
+
+
+def is_firmware_verified(board) -> bool:
+    if not board:
+        return False
+    if board.get("board_id") in VERIFIED_BOARD_IDS:
+        return True
+    if board.get("data_source") == "firmware_log":
+        return True
+    if board.get("tool") == "Tool13" and board.get("product_name") == "BAP":
+        return True
+    return False
+
+
+def firmware_verified_label(board) -> str:
+    return "verified" if is_firmware_verified(board) else "unverified"
+
 NEW_BOARD_COLUMNS_DDL = """
     inventory_serial  TEXT,
     status            TEXT,
@@ -615,7 +647,8 @@ def list_boards(product_name=None, board_name=None, firmware=None, tool=None, se
             b.*,
             cf.firmware AS current_firmware,
             cf.fpga AS current_fpga,
-            COALESCE(cf.event_date, b.source_updated_at) AS last_update
+            COALESCE(cf.event_date, b.source_updated_at) AS last_update,
+            {firmware_verified_sql("b")} AS firmware_verified
         FROM boards b
         LEFT JOIN current_firmware cf ON cf.board_id = b.board_id
         {where}
@@ -986,7 +1019,8 @@ def list_history(product_name=None, firmware=None, tool=None, search=None, limit
             b.board_name,
             b.product_name,
             b.tool,
-            b.serial
+            b.serial,
+            {firmware_verified_sql("b")} AS firmware_verified
         FROM firmware_history h
         JOIN boards b ON b.board_id = h.board_id
         {where}

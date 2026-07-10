@@ -185,6 +185,7 @@ def board_detail(board_id):
     return render_template(
         "board_detail.html",
         board=board,
+        firmware_verified=db.firmware_verified_label(board),
         history=db.board_history(board_id),
         events=db.board_events(board_id),
     )

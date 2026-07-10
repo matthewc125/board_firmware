@@ -26,3 +26,13 @@
     {{ label }}{% if sort == column %} {% if order == 'asc' %}▲{% else %}▼{% endif %}{% endif %}
   </a>
 {%- endmacro %}
+
+{% macro verified_badge(status) -%}
+  {% if status == 'verified' %}
+    <span class="badge text-bg-success">Verified</span>
+  {% elif status == 'unverified' %}
+    <span class="badge text-bg-warning text-dark">Unverified</span>
+  {% else %}
+    <span class="text-muted">—</span>
+  {% endif %}
+{%- endmacro %}

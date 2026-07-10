@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import result_badge %}
+{% from "macros.html" import result_badge, verified_badge %}
 
 {% block title %}Board {{ board.board_id }} — Board Firmware Log{% endblock %}
 
@@ -92,7 +92,8 @@
           <tr>
             <th>Date</th>
             <th>FPGA</th>
-            <th>Firmware</th>
+            <th class="col-firmware">Firmware</th>
+            <th class="col-verified">Verified</th>
             <th>Installer</th>
             <th>Result</th>
             {% if session.get('admin') %}<th></th>{% endif %}
@@ -103,7 +104,8 @@
           <tr>
             <td>{{ row.event_date }}{% if row.event_time %} {{ row.event_time }}{% endif %}</td>
             <td>{{ row.fpga or '—' }}</td>
-            <td><code>{{ row.firmware }}</code></td>
+            <td class="col-firmware"><code>{{ row.firmware }}</code></td>
+            <td class="col-verified">{{ verified_badge(firmware_verified) }}</td>
             <td>{{ row.installer or '—' }}</td>
             <td>{{ result_badge(row.result) }}</td>
             {% if session.get('admin') %}
@@ -117,7 +119,7 @@
             {% endif %}
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-muted">No firmware history for this board.</td></tr>
+          <tr><td colspan="7" class="text-muted">No firmware history for this board.</td></tr>
           {% endfor %}
         </tbody>
       </table>
