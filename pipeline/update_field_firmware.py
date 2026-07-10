@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set unverified boards to field-deployed firmware versions."""
+"""Set unverified boards to field-deployed firmware versions and release dates."""
 from __future__ import annotations
 
 import sqlite3
@@ -14,17 +14,13 @@ from db import firmware_verified_sql
 
 DEFAULT_DB = join(PROJECT_DIR, "board_firmware.db")
 
-# product_name -> (firmware, default_event_date)
+# product_name -> (firmware, release_date)
 FIELD_DEPLOYED = {
     "BAP": ("1.0.34", "2026-04-06"),
     "ES4": ("1.04.26", "2025-05-02"),
     "EM1": ("2.0.1.6", "2022-01-17"),
     "OBJ": ("2.0.1.6", "2022-01-17"),
 }
-
-
-def event_date(board: sqlite3.Row, default_date: str) -> str:
-    return board["source_updated_at"] or default_date
 
 
 def main(db_path: str = DEFAULT_DB) -> None:
@@ -35,7 +31,7 @@ def main(db_path: str = DEFAULT_DB) -> None:
         boards = conn.execute(
             f"""
             SELECT b.board_id, b.product_name, b.board_name, b.serial,
-                   b.source_updated_at, cf.firmware,
+                   cf.firmware, cf.event_date,
                    {verified_expr} AS firmware_verified
             FROM boards b
             LEFT JOIN current_firmware cf ON cf.board_id = b.board_id
@@ -54,18 +50,19 @@ def main(db_path: str = DEFAULT_DB) -> None:
                 skipped += 1
                 continue
 
-            target_fw, default_date = target
-            if board["firmware"] == target_fw:
+            target_fw, release_date = target
+            needs_fw = board["firmware"] != target_fw
+            needs_date = board["event_date"] != release_date
+            if not needs_fw and not needs_date:
                 print(
                     f"  ok   board {board['board_id']} {product} {board['serial']} "
-                    f"already {target_fw}"
+                    f"already {target_fw} ({release_date})"
                 )
                 skipped += 1
                 continue
 
-            date = event_date(board, default_date)
             rows = conn.execute(
-                "SELECT event_id, firmware FROM firmware_history WHERE board_id = ?",
+                "SELECT event_id, firmware, event_date FROM firmware_history WHERE board_id = ?",
                 (board["board_id"],),
             ).fetchall()
             if not rows:
@@ -75,7 +72,7 @@ def main(db_path: str = DEFAULT_DB) -> None:
                         (board_id, event_date, event_time, fpga, firmware, installer, result)
                     VALUES (?, ?, NULL, NULL, ?, 'field deployed', 'PASS')
                     """,
-                    (board["board_id"], date, target_fw),
+                    (board["board_id"], release_date, target_fw),
                 )
             else:
                 for row in rows:
@@ -86,11 +83,17 @@ def main(db_path: str = DEFAULT_DB) -> None:
                             installer = 'field deployed', result = 'PASS'
                         WHERE event_id = ?
                         """,
-                        (target_fw, date, row["event_id"]),
+                        (target_fw, release_date, row["event_id"]),
                     )
+
+            changes = []
+            if needs_fw:
+                changes.append(f"fw {board['firmware']} -> {target_fw}")
+            if needs_date:
+                changes.append(f"date {board['event_date']} -> {release_date}")
             print(
-                f"  fix  board {board['board_id']} {product} {board['serial']} "
-                f"{board['firmware']} -> {target_fw} ({date})"
+                f"  fix  board {board['board_id']} {product} {board['serial']}: "
+                + ", ".join(changes)
             )
             updated += 1
 
