@@ -18,7 +18,7 @@ import pandas as pd
 
 SCRIPT_DIR = dirname(abspath(__file__))
 PROJECT_DIR = dirname(SCRIPT_DIR)
-DEFAULT_XLSM = join(SCRIPT_DIR, "firmware_database.xlsm")
+DEFAULT_XLSM = join(SCRIPT_DIR, "sources", "firmware_database.xlsm")
 DEFAULT_DB = join(PROJECT_DIR, "board_firmware.db")
 DEFAULT_SCHEMA = join(SCRIPT_DIR, "schema.sql")
 

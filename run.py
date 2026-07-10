@@ -154,6 +154,8 @@ class ServerLauncher:
         env["FLASK_HOST"] = "0.0.0.0" if self.lan_var.get() else "127.0.0.1"
         env["FLASK_PORT"] = str(self.port())
         env["FLASK_DEBUG"] = "1" if self.debug_var.get() else "0"
+        # Always use the curated main database, not the full archive side DB.
+        env["DATABASE_PATH"] = str(PROJECT_DIR / "board_firmware.db")
         return env
 
     def start_server(self) -> None:

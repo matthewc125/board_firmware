@@ -827,6 +827,8 @@ def delete_board(board_id):
         ).fetchone()
         if not board:
             return 0
+        conn.execute("DELETE FROM deleted_firmware_history WHERE board_id = ?", (board_id,))
+        conn.execute("DELETE FROM deleted_boards WHERE board_id = ?", (board_id,))
         conn.execute(
             f"INSERT INTO deleted_boards ({', '.join(BOARD_COLUMNS)}, deleted_at) "
             f"VALUES ({', '.join('?' for _ in BOARD_COLUMNS)}, ?)",

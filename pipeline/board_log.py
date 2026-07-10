@@ -21,9 +21,12 @@ COLS = [
 ]
 
 
+SOURCES_DIR = join(SCRIPT_DIR, "sources")
+
+
 def load_raw_data(path=None):
     if path is None:
-        path = join(SCRIPT_DIR, "BoardFirmwareLog.xlsx")
+        path = join(SOURCES_DIR, "BoardFirmwareLog.xlsx")
     """Load raw log rows in spreadsheet order; skip blank trailing rows."""
     raw = pd.read_excel(path, sheet_name=0, header=0)
     raw = raw.rename(columns={
@@ -195,7 +198,7 @@ End Sub
 
 def write_bas_file(path=None):
     if path is None:
-        path = join(SCRIPT_DIR, "firmware_database_macros.bas")
+        path = join(SOURCES_DIR, "firmware_database_macros.bas")
     """Export the VBA module to a .bas file (manual fallback if COM embed fails)."""
     content = (
         'Attribute VB_Name = "FirmwareDatabase"\r\n'
@@ -334,8 +337,8 @@ current = build_current_firmware(history)
 #   .xlsm  - same data + embedded VBA for Excel-only refresh later
 # ============================================================
 
-OUTPUT_XLSX = join(SCRIPT_DIR, "firmware_database.xlsx")
-OUTPUT_XLSM = join(SCRIPT_DIR, "firmware_database.xlsm")
+OUTPUT_XLSX = join(SOURCES_DIR, "firmware_database.xlsx")
+OUTPUT_XLSM = join(SOURCES_DIR, "firmware_database.xlsm")
 
 with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as writer:
     boards.to_excel(writer, sheet_name="Boards", index=False)

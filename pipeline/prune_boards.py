@@ -26,8 +26,8 @@ from db import delete_board
 from inventory_normalize import board_removal_reasons, load_strikethrough_keys
 
 DEFAULT_DB = join(PROJECT_DIR, "board_firmware.db")
-DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "Electronics_Column_ Tracking.xlsx")
-DEFAULT_PICO = join(SCRIPT_DIR, "2025-11-21_Picoammeter_Board_List.xlsx")
+DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "sources", "Electronics_Column_ Tracking.xlsx")
+DEFAULT_PICO = join(SCRIPT_DIR, "sources", "2025-11-21_Picoammeter_Board_List.xlsx")
 
 
 def prune_boards(

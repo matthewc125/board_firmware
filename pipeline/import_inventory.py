@@ -40,8 +40,8 @@ from inventory_normalize import (
 SCRIPT_DIR = dirname(abspath(__file__))
 PROJECT_DIR = dirname(SCRIPT_DIR)
 DEFAULT_DB = join(PROJECT_DIR, "board_firmware.db")
-DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "Electronics_Column_ Tracking.xlsx")
-DEFAULT_PICO = join(SCRIPT_DIR, "2025-11-21_Picoammeter_Board_List.xlsx")
+DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "sources", "Electronics_Column_ Tracking.xlsx")
+DEFAULT_PICO = join(SCRIPT_DIR, "sources", "2025-11-21_Picoammeter_Board_List.xlsx")
 
 BOARD_COLS = [
     "board_id", "tool", "board_slot", "manufacturer", "board_name",
@@ -324,7 +324,12 @@ def board_has_firmware(conn, board_id: int | None) -> bool:
 
 
 def import_electronics(
-    conn, path: str, report: ImportReport, dry_run: bool, strike_keys: set[str],
+    conn,
+    path: str,
+    report: ImportReport,
+    dry_run: bool,
+    strike_keys: set[str],
+    include_all: bool = False,
 ) -> None:
     df = load_electronics(path)
     by_inventory, by_strong, by_pico = load_board_indexes(conn)
@@ -332,7 +337,7 @@ def import_electronics(
     for idx, row in df.iterrows():
         data = etr_row_to_board(row, idx + 2)
         label = f"ETR row {idx + 2} {data['inventory_serial']}"
-        skip = etr_row_excluded(row, strike_keys)
+        skip = None if include_all else etr_row_excluded(row, strike_keys)
         if skip:
             report.skipped.append(f"{label}: {skip}")
             continue
@@ -369,7 +374,12 @@ def import_electronics(
 
 
 def import_pico(
-    conn, path: str, report: ImportReport, dry_run: bool, strike_keys: set[str],
+    conn,
+    path: str,
+    report: ImportReport,
+    dry_run: bool,
+    strike_keys: set[str],
+    include_all: bool = False,
 ) -> None:
     df = load_pico(path)
     by_inventory, by_strong, by_pico = load_board_indexes(conn)
@@ -377,7 +387,7 @@ def import_pico(
     for idx, row in df.iterrows():
         data = pico_row_to_board(row, idx + 2)
         label = f"Pico row {idx + 2} {data['board_name']} {data['inventory_serial']}"
-        skip = pico_row_excluded(row, strike_keys)
+        skip = None if include_all else pico_row_excluded(row, strike_keys)
         if skip:
             report.skipped.append(f"{label}: {skip}")
             continue
@@ -391,7 +401,7 @@ def import_pico(
             pk = pico_match_key(data.get("part_number"), data.get("inventory_serial"))
             report.ambiguous.append(f"{label}: multiple matches for key {pk}")
             continue
-        if not board_has_firmware(conn, board_id):
+        if not include_all and not board_has_firmware(conn, board_id):
             report.skipped.append(f"{label}: no_firmware")
             continue
 
@@ -481,6 +491,7 @@ def import_inventory(
     electronics_path: str,
     pico_path: str,
     dry_run: bool = False,
+    include_all: bool = False,
 ) -> ImportReport:
     report = ImportReport()
     etr_df = load_electronics(electronics_path)
@@ -490,8 +501,8 @@ def import_inventory(
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
-        import_electronics(conn, electronics_path, report, dry_run, strike_keys)
-        import_pico(conn, pico_path, report, dry_run, strike_keys)
+        import_electronics(conn, electronics_path, report, dry_run, strike_keys, include_all)
+        import_pico(conn, pico_path, report, dry_run, strike_keys, include_all)
         if not dry_run:
             record_import_run(conn, "electronics_tracking", electronics_path, len(etr_df), report)
             record_import_run(conn, "pico_list", pico_path, len(pico_df), report)
@@ -509,6 +520,11 @@ def main():
     parser.add_argument("--electronics", default=DEFAULT_ELECTRONICS, help="Electronics tracking xlsx")
     parser.add_argument("--pico", default=DEFAULT_PICO, help="Picoammeter board list xlsx")
     parser.add_argument("--dry-run", action="store_true", help="Report actions without writing")
+    parser.add_argument(
+        "--include-all",
+        action="store_true",
+        help="Import every spreadsheet row (strikethrough, scrapped, no firmware, etc.)",
+    )
     args = parser.parse_args()
 
     import_inventory(
@@ -516,6 +532,7 @@ def main():
         abspath(args.electronics),
         abspath(args.pico),
         dry_run=args.dry_run,
+        include_all=args.include_all,
     )
 
 

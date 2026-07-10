@@ -1,4 +1,7 @@
 site/
+pipeline/netapp_import/
+backups/
+board_firmware_full.db
 __pycache__/
 *.py[cod]
 .Python

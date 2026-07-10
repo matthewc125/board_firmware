@@ -18,8 +18,8 @@ from inventory_normalize import (
 )
 
 DEFAULT_DB = join(PROJECT_DIR, "board_firmware.db")
-DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "Electronics_Column_ Tracking.xlsx")
-DEFAULT_PICO = join(SCRIPT_DIR, "2025-11-21_Picoammeter_Board_List.xlsx")
+DEFAULT_ELECTRONICS = join(SCRIPT_DIR, "sources", "Electronics_Column_ Tracking.xlsx")
+DEFAULT_PICO = join(SCRIPT_DIR, "sources", "2025-11-21_Picoammeter_Board_List.xlsx")
 
 
 def should_restore(board: dict, fw_count: int, strike_keys: set[str]) -> bool:
