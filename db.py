@@ -1215,6 +1215,9 @@ STATUS_COLUMN_FAMILY = {
 # Display / admin order for catalog families.
 CATALOG_FAMILY_ORDER = ("BAP", "ES4", "EM1", "OBJ", "MFPGA", "PIB", "FF")
 
+# Status report always shows the field-deployed version for these columns.
+STATUS_FIXED_FIELD_COLUMNS = frozenset({"EM1", "OBJ"})
+
 
 FIELD_DEPLOYED_LABEL = "field deployed"
 
