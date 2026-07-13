@@ -1,5 +1,5 @@
 site/
-pipeline/netapp_import/
+pipeline/
 backups/
 board_firmware_full.db
 __pycache__/
