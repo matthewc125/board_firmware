@@ -1637,14 +1637,15 @@ def map_board_to_status_column(product_name, board_name):
     product = (product_name or "").strip().upper()
     board = (board_name or "").strip().upper()
 
-    if product == "ES4" or board in {"LSF", "USF", "BLANKER"}:
+    if product == "ES4" or board in {"LSF", "USF", "BLANKER", "ES", "ES4"}:
         if board == "LSF":
             return "ES4 LSF"
         if board == "USF":
             return "ES4 USF"
         if board == "BLANKER":
             return "ES4 Blanker"
-        return None
+        # Generic ES4 inventory row — caller expands to all ES4 status columns.
+        return "ES4"
 
     if product == "BAP" or board in {"BAP", "BAP2"}:
         return "BAP"
@@ -1737,6 +1738,7 @@ def firmware_status_matrix(min_tools=13):
 
     by_tool_col = {}
     max_tool = 0
+    es4_status_columns = ("ES4 USF", "ES4 LSF", "ES4 Blanker")
 
     for row in rows:
         tool_num = parse_tool_number(row["tool"])
@@ -1748,9 +1750,11 @@ def firmware_status_matrix(min_tools=13):
             continue
         if column in STATUS_FIXED_FIELD_COLUMNS:
             continue
-        firmware = _resolve_status_firmware(row["firmware"], column, tool_num)
-        if firmware:
-            by_tool_col.setdefault((tool_num, column), set()).add(firmware)
+        target_columns = es4_status_columns if column == "ES4" else (column,)
+        for target in target_columns:
+            firmware = _resolve_status_firmware(row["firmware"], target, tool_num)
+            if firmware:
+                by_tool_col.setdefault((tool_num, target), set()).add(firmware)
 
     tool_count = max(min_tools, max_tool) if (max_tool or columns) else 0
 
