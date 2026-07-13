@@ -958,12 +958,51 @@
     lastQueryResult = result;
   }
 
+  function forceFileDownload(url, filename) {
+    return fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Could not download file (${response.status}).`);
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = filename || "download";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(objectUrl);
+      });
+  }
+
+  function wireForceDownloads(root) {
+    (root || document).querySelectorAll("a.js-force-download").forEach((anchor) => {
+      if (anchor.dataset.downloadWired === "1") return;
+      anchor.dataset.downloadWired = "1";
+      anchor.addEventListener("click", (event) => {
+        event.preventDefault();
+        const filename =
+          anchor.getAttribute("download") ||
+          anchor.href.split("/").pop() ||
+          "download";
+        forceFileDownload(anchor.href, filename).catch((error) => {
+          showError(error.message || String(error));
+        });
+      });
+    });
+  }
+
   function renderData() {
     const form = document.getElementById("data-query-form");
     const textarea = document.getElementById("data-query");
     const error = document.getElementById("data-query-error");
     const download = document.getElementById("data-query-download");
     const defaultQuery = "SELECT * FROM current_firmware ORDER BY board_id";
+
+    wireForceDownloads();
 
     if (textarea && !textarea.value.trim()) {
       textarea.value = defaultQuery;

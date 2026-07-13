@@ -11,15 +11,17 @@
       <div class="card-header">Downloads</div>
       <div class="list-group list-group-flush">
         {% for table in csv_exports %}
-        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-           href="{{ base_path }}data/{{ table.filename }}" download>
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center js-force-download"
+           href="{{ base_path }}data/{{ table.filename }}"
+           download="{{ table.filename }}">
           {{ table.name }}
           <span class="badge text-bg-light border">{{ table.type }}</span>
         </a>
         {% endfor %}
         {% if firmware_status %}
-        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-           href="{{ base_path }}data/{{ firmware_status.filename }}" download>
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center js-force-download"
+           href="{{ base_path }}data/{{ firmware_status.filename }}"
+           download="{{ firmware_status.filename }}">
           firmware_status
           <span class="badge text-bg-light border">xlsx</span>
         </a>
