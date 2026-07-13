@@ -761,13 +761,9 @@
       ["Type", "board_name"],
       ["Location", "tool"],
       ["Serial", "serial"],
-      ["Inventory SN", "inventory_serial"],
-      ["Status", "status"],
       ["Part Number", "part_number"],
       ["Revision", "revision"],
-      ["File ID", "file_id"],
       ["DDR FBGA", "ddr_fbga"],
-      ["Manufacturer", "manufacturer"],
     ];
 
     const head = document.getElementById("hardware-head");
@@ -787,16 +783,12 @@
             <td>${escapeHtml(board.board_name)}</td>
             <td>${dash(board.tool)}</td>
             <td>${escapeHtml(board.serial)}</td>
-            <td>${dash(board.inventory_serial)}</td>
-            <td>${dash(board.status)}</td>
             <td>${dash(board.part_number)}</td>
             <td>${dash(board.revision)}</td>
-            <td>${dash(board.file_id)}</td>
             <td>${dash(board.ddr_fbga)}</td>
-            <td>${dash(board.manufacturer)}</td>
           </tr>
         `).join("")
-        : '<tr><td colspan="12" class="text-muted">No boards match your search.</td></tr>';
+        : '<tr><td colspan="8" class="text-muted">No boards match your search.</td></tr>';
     }
 
     const count = document.getElementById("hardware-count");

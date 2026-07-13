@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import config  # noqa: E402
 import db  # noqa: E402
+import firmware_status_report  # noqa: E402
 
 STATIC_SITE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "site"
@@ -46,6 +47,19 @@ def export_csvs(output_data_dir: Path) -> list[dict]:
     return exports
 
 
+def export_firmware_status(output_data_dir: Path) -> dict:
+    output_data_dir.mkdir(parents=True, exist_ok=True)
+    filename = "firmware_status.xlsx"
+    path = output_data_dir / filename
+    path.write_bytes(firmware_status_report.build_firmware_status_workbook())
+    return {
+        "name": "firmware_status",
+        "type": "report",
+        "filename": filename,
+        "label": "Firmware status (Tool × board type)",
+    }
+
+
 def copy_assets(output_dir: Path) -> None:
     static_out = output_dir / "static"
     static_out.mkdir(parents=True, exist_ok=True)
@@ -60,7 +74,13 @@ def copy_database(output_dir: Path) -> None:
     shutil.copy2(config.DATABASE, data_dir / "board_firmware.db")
 
 
-def render_pages(output_dir: Path, base_path: str, built_at: str, csv_exports: list[dict]) -> None:
+def render_pages(
+    output_dir: Path,
+    base_path: str,
+    built_at: str,
+    csv_exports: list[dict],
+    firmware_status: dict | None = None,
+) -> None:
     env = Environment(
         loader=FileSystemLoader(STATIC_SITE_DIR / "templates"),
         autoescape=select_autoescape(["html", "xml"]),
@@ -69,6 +89,7 @@ def render_pages(output_dir: Path, base_path: str, built_at: str, csv_exports: l
         "base_path": base_path,
         "built_at": built_at,
         "csv_exports": csv_exports,
+        "firmware_status": firmware_status,
         "page": "",
     }
     for page in PAGES:
@@ -86,8 +107,10 @@ def build(output_dir: Path, base_path: str) -> None:
     built_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     copy_assets(output_dir)
     copy_database(output_dir)
-    csv_exports = export_csvs(output_dir / "data")
-    render_pages(output_dir, base_path, built_at, csv_exports)
+    data_dir = output_dir / "data"
+    csv_exports = export_csvs(data_dir)
+    firmware_status = export_firmware_status(data_dir)
+    render_pages(output_dir, base_path, built_at, csv_exports, firmware_status)
 
     print(f"Built static site in {output_dir}")
     print(f"Base path: {base_path}")

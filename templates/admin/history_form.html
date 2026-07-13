@@ -5,12 +5,13 @@
 {% block content %}
 <h1 class="h4 mb-3">{% if event %}Edit Firmware Record{% else %}Add Firmware Record{% endif %}</h1>
 
-<form method="post" class="row g-3">
+<form method="post" class="row g-3" id="history-form">
   <div class="col-md-6">
     <label class="form-label">Board</label>
-    <select class="form-select" name="board_id" required>
+    <select class="form-select" name="board_id" id="board-select" required>
       {% for b in boards %}
       <option value="{{ b.board_id }}"
+        data-family="{{ catalog_families.get(b.board_id, '') }}"
         {% if (event and event.board_id == b.board_id) or (default_board_id and default_board_id == b.board_id) %}selected{% endif %}>
         {{ b.board_id }} — {{ b.product_name }} {{ b.board_name }} {{ b.tool }} #{{ b.serial }}
       </option>
@@ -27,15 +28,26 @@
   </div>
   <div class="col-md-4">
     <label class="form-label">Firmware</label>
-    <input type="text" class="form-control" name="firmware" value="{{ event.firmware if event else '' }}" required>
+    <select class="form-select" id="firmware-select">
+      <option value="">Select version…</option>
+    </select>
+    <input type="text" class="form-control d-none" id="firmware-custom" placeholder="Type a specific version">
+    <input type="hidden" name="firmware" id="firmware-value" value="{{ event.firmware if event else '' }}" required>
+    <div class="form-text">Catalog releases for this board type, or choose Other to type a version.</div>
   </div>
   <div class="col-md-2">
     <label class="form-label">FPGA</label>
-    <input type="text" class="form-control" name="fpga" value="{{ event.fpga if event else '' }}">
+    <input type="text" class="form-control" name="fpga" id="fpga-input"
+           value="{{ event.fpga if event else '' }}" placeholder="optional">
+    <div class="form-text">Auto-fills from catalog when set.</div>
   </div>
   <div class="col-md-3">
     <label class="form-label">Installer</label>
-    <input type="text" class="form-control" name="installer" value="{{ event.installer if event else '' }}" placeholder="Vivado, OpalKelly">
+    <select class="form-select" id="installer-select">
+      <option value="">Select installer…</option>
+    </select>
+    <input type="text" class="form-control d-none" id="installer-custom" placeholder="Type installer">
+    <input type="hidden" name="installer" id="installer-value" value="{{ event.installer if event else '' }}">
   </div>
   <div class="col-md-3">
     <label class="form-label">Result</label>
@@ -60,4 +72,242 @@
   <button type="submit" class="btn btn-outline-danger btn-sm">Remove record</button>
 </form>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="catalog-by-family">{{ catalog_by_family | tojson }}</script>
+<script>
+(function () {
+  const catalog = JSON.parse(document.getElementById("catalog-by-family").textContent || "{}");
+  const boardSelect = document.getElementById("board-select");
+  const firmwareSelect = document.getElementById("firmware-select");
+  const firmwareCustom = document.getElementById("firmware-custom");
+  const firmwareValue = document.getElementById("firmware-value");
+  const installerSelect = document.getElementById("installer-select");
+  const installerCustom = document.getElementById("installer-custom");
+  const installerValue = document.getElementById("installer-value");
+  const fpgaInput = document.getElementById("fpga-input");
+  const form = document.getElementById("history-form");
+  let lastAutofilledFpga = "";
+  let releaseByVersion = {};
+  let currentFamily = "";
+  const OTHER = "__other__";
+
+  function selectedFamily() {
+    const option = boardSelect.options[boardSelect.selectedIndex];
+    return (option && option.dataset.family) || "";
+  }
+
+  function familyReleases() {
+    return catalog[selectedFamily()] || [];
+  }
+
+  function installerOptionsForFamily(family) {
+    if (family === "EM1" || family === "OBJ") {
+      return ["OpalKelly"];
+    }
+    return ["Vivado", "LabVIEW"];
+  }
+
+  function showFirmwareSelect() {
+    firmwareSelect.classList.remove("d-none");
+    firmwareCustom.classList.add("d-none");
+  }
+
+  function showFirmwareCustom() {
+    firmwareSelect.classList.add("d-none");
+    firmwareCustom.classList.remove("d-none");
+    firmwareCustom.focus();
+  }
+
+  function showInstallerSelect() {
+    installerSelect.classList.remove("d-none");
+    installerCustom.classList.add("d-none");
+  }
+
+  function showInstallerCustom() {
+    installerSelect.classList.add("d-none");
+    installerCustom.classList.remove("d-none");
+    installerCustom.focus();
+  }
+
+  function applyCatalogFpga(version) {
+    const entry = releaseByVersion[version];
+    if (!entry || !entry.fpga) return;
+    const current = fpgaInput.value.trim();
+    if (!current || current === lastAutofilledFpga) {
+      fpgaInput.value = entry.fpga;
+      lastAutofilledFpga = entry.fpga;
+    }
+  }
+
+  function clearFirmwareFields() {
+    firmwareValue.value = "";
+    firmwareCustom.value = "";
+    firmwareSelect.value = "";
+    fpgaInput.value = "";
+    lastAutofilledFpga = "";
+    showFirmwareSelect();
+  }
+
+  function clearInstallerFields() {
+    installerValue.value = "";
+    installerCustom.value = "";
+    installerSelect.value = "";
+    showInstallerSelect();
+  }
+
+  function refreshFirmwareChoices(preferredVersion) {
+    const releases = familyReleases();
+    releaseByVersion = {};
+    const current = (preferredVersion || "").trim();
+
+    firmwareSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = releases.length ? "Select version…" : "No catalog releases — choose Other";
+    firmwareSelect.appendChild(placeholder);
+
+    releases.forEach((entry) => {
+      releaseByVersion[entry.version] = entry;
+      const opt = document.createElement("option");
+      opt.value = entry.version;
+      let label = entry.version;
+      if (entry.fpga) label += " (FPGA " + entry.fpga + ")";
+      if (entry.is_field_deployed) label += " — field";
+      opt.textContent = label;
+      firmwareSelect.appendChild(opt);
+    });
+
+    const other = document.createElement("option");
+    other.value = OTHER;
+    other.textContent = "Other…";
+    firmwareSelect.appendChild(other);
+
+    if (current && releaseByVersion[current]) {
+      firmwareSelect.value = current;
+      firmwareValue.value = current;
+      showFirmwareSelect();
+      applyCatalogFpga(current);
+    } else if (current) {
+      firmwareSelect.value = OTHER;
+      firmwareCustom.value = current;
+      firmwareValue.value = current;
+      showFirmwareCustom();
+    } else {
+      clearFirmwareFields();
+      // keep dropdown options, just empty selection
+      firmwareSelect.value = "";
+      showFirmwareSelect();
+    }
+  }
+
+  function refreshInstallerChoices(preferredInstaller) {
+    const family = selectedFamily();
+    const options = installerOptionsForFamily(family);
+    const current = (preferredInstaller || "").trim();
+
+    installerSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select installer…";
+    installerSelect.appendChild(placeholder);
+
+    options.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      installerSelect.appendChild(opt);
+    });
+
+    const other = document.createElement("option");
+    other.value = OTHER;
+    other.textContent = "Other…";
+    installerSelect.appendChild(other);
+
+    if (current && options.includes(current)) {
+      installerSelect.value = current;
+      installerValue.value = current;
+      showInstallerSelect();
+    } else if (current) {
+      installerSelect.value = OTHER;
+      installerCustom.value = current;
+      installerValue.value = current;
+      showInstallerCustom();
+    } else {
+      clearInstallerFields();
+      installerSelect.value = "";
+      showInstallerSelect();
+    }
+  }
+
+  function onBoardChange() {
+    const nextFamily = selectedFamily();
+    if (nextFamily !== currentFamily) {
+      clearFirmwareFields();
+      clearInstallerFields();
+      currentFamily = nextFamily;
+      refreshFirmwareChoices("");
+      refreshInstallerChoices("");
+      return;
+    }
+    refreshFirmwareChoices(firmwareValue.value);
+    refreshInstallerChoices(installerValue.value);
+  }
+
+  boardSelect.addEventListener("change", onBoardChange);
+
+  firmwareSelect.addEventListener("change", () => {
+    if (firmwareSelect.value === OTHER) {
+      firmwareCustom.value = "";
+      firmwareValue.value = "";
+      showFirmwareCustom();
+      return;
+    }
+    showFirmwareSelect();
+    firmwareValue.value = firmwareSelect.value;
+    applyCatalogFpga(firmwareSelect.value);
+  });
+  firmwareCustom.addEventListener("input", () => {
+    firmwareValue.value = firmwareCustom.value.trim();
+  });
+
+  installerSelect.addEventListener("change", () => {
+    if (installerSelect.value === OTHER) {
+      installerCustom.value = "";
+      installerValue.value = "";
+      showInstallerCustom();
+      return;
+    }
+    showInstallerSelect();
+    installerValue.value = installerSelect.value;
+  });
+  installerCustom.addEventListener("input", () => {
+    installerValue.value = installerCustom.value.trim();
+  });
+
+  fpgaInput.addEventListener("input", () => {
+    if (fpgaInput.value.trim() !== lastAutofilledFpga) {
+      lastAutofilledFpga = "";
+    }
+  });
+
+  form.addEventListener("submit", () => {
+    if (firmwareSelect.classList.contains("d-none") || firmwareSelect.value === OTHER) {
+      firmwareValue.value = firmwareCustom.value.trim();
+    } else {
+      firmwareValue.value = firmwareSelect.value;
+    }
+    if (installerSelect.classList.contains("d-none") || installerSelect.value === OTHER) {
+      installerValue.value = installerCustom.value.trim();
+    } else {
+      installerValue.value = installerSelect.value;
+    }
+  });
+
+  currentFamily = selectedFamily();
+  refreshFirmwareChoices(firmwareValue.value);
+  refreshInstallerChoices(installerValue.value);
+})();
+</script>
 {% endblock %}

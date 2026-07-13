@@ -9,7 +9,7 @@
     <h1 class="h3 mb-0">Hardware</h1>
   </div>
   <form id="search-form" action="{{ url_for('hardware') }}" method="get" class="d-flex gap-2">
-    <input type="search" id="board-search" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search ID, tool, serial, inventory serial, status…">
+    <input type="search" id="board-search" name="q" value="{{ search }}" class="form-control form-control-sm" placeholder="Search ID, tool, serial, product…">
     <button class="btn btn-sm btn-outline-primary" type="submit">Search</button>
   </form>
 </div>
@@ -23,13 +23,9 @@
         <th>{{ hw_sort_link('Type', 'board_name', sort, order, search) }}</th>
         <th>{{ hw_sort_link('Location', 'tool', sort, order, search) }}</th>
         <th>{{ hw_sort_link('Serial', 'serial', sort, order, search) }}</th>
-        <th>{{ hw_sort_link('Inventory SN', 'inventory_serial', sort, order, search) }}</th>
-        <th>{{ hw_sort_link('Status', 'status', sort, order, search) }}</th>
         <th>{{ hw_sort_link('Part Number', 'part_number', sort, order, search) }}</th>
         <th>{{ hw_sort_link('Revision', 'revision', sort, order, search) }}</th>
-        <th>{{ hw_sort_link('File ID', 'file_id', sort, order, search) }}</th>
         <th>{{ hw_sort_link('DDR FBGA', 'ddr_fbga', sort, order, search) }}</th>
-        <th>{{ hw_sort_link('Manufacturer', 'manufacturer', sort, order, search) }}</th>
       </tr>
     </thead>
     <tbody>
@@ -40,16 +36,12 @@
         <td>{{ b.board_name }}</td>
         <td>{{ b.tool or '—' }}</td>
         <td>{{ b.serial }}</td>
-        <td>{{ b.inventory_serial or '—' }}</td>
-        <td>{{ b.status or '—' }}</td>
         <td>{{ b.part_number or '—' }}</td>
         <td>{{ b.revision or '—' }}</td>
-        <td>{{ b.file_id or '—' }}</td>
         <td>{{ b.ddr_fbga or '—' }}</td>
-        <td>{{ b.manufacturer or '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="12" class="text-muted">No boards match your search.</td></tr>
+      <tr><td colspan="8" class="text-muted">No boards match your search.</td></tr>
       {% endfor %}
     </tbody>
   </table>

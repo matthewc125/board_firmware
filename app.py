@@ -18,6 +18,7 @@ from flask import (
 
 import config
 import db
+import firmware_status_report
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.SECRET_KEY
@@ -155,12 +156,27 @@ def data_export():
     if not table:
         flash("No table specified.", "warning")
         return redirect(url_for("data"))
+    if table in db.NON_EXPORT_TABLES:
+        flash("That table is not available for download.", "warning")
+        return redirect(url_for("data"))
     try:
         columns, rows, _ = db.fetch_table_rows(table)
         return _csv_response(rows, columns, filename=f"{table}.csv")
     except ValueError as exc:
         flash(str(exc), "danger")
         return redirect(url_for("data"))
+
+
+@app.route("/data/firmware-status")
+def firmware_status_export():
+    """Download Tool × board-type firmware matrix as a colored Excel workbook."""
+    payload = firmware_status_report.build_firmware_status_workbook()
+    filename = firmware_status_report.default_filename()
+    return Response(
+        payload,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _csv_response(rows, columns, filename="export.csv"):
@@ -220,6 +236,81 @@ def admin_index():
     )
 
 
+@app.route("/admin/firmware-catalog", methods=["GET"])
+@login_required
+def admin_firmware_catalog():
+    from collections import OrderedDict
+
+    edit_id = request.args.get("edit", type=int)
+    entry = db.get_firmware_catalog_entry(edit_id) if edit_id else None
+    catalog = db.list_firmware_catalog()
+    catalog_by_family = OrderedDict()
+    for family in db.list_firmware_families():
+        catalog_by_family[family] = []
+    for row in catalog:
+        catalog_by_family.setdefault(row["family"], []).append(row)
+    catalog_by_family = OrderedDict(
+        (family, rows) for family, rows in catalog_by_family.items() if rows
+    )
+    families = db.list_firmware_families()
+    return render_template(
+        "admin/firmware_catalog.html",
+        catalog=catalog,
+        catalog_by_family=catalog_by_family.items(),
+        entry=entry,
+        families=families,
+    )
+
+
+@app.route("/admin/firmware-catalog/save", methods=["POST"])
+@app.route("/admin/firmware-catalog/<int:catalog_id>/save", methods=["POST"])
+@login_required
+def admin_firmware_catalog_save(catalog_id=None):
+    data = {
+        "family": (request.form.get("family") or "").strip().upper(),
+        "version": (request.form.get("version") or "").strip(),
+        "fpga": (request.form.get("fpga") or "").strip() or None,
+        "release_date": (request.form.get("release_date") or "").strip() or None,
+        "notes": (request.form.get("notes") or "").strip() or None,
+        "tools": (request.form.get("tools") or "").strip() or None,
+        "is_field_deployed": bool(request.form.get("is_field_deployed")),
+        "in_status_ranking": bool(request.form.get("in_status_ranking")),
+    }
+    try:
+        if not data["family"] or not data["version"]:
+            raise ValueError("Family and version are required.")
+        if catalog_id:
+            db.update_firmware_catalog(catalog_id, data)
+        else:
+            db.insert_firmware_catalog(data)
+        flash("Firmware catalog entry saved.", "success")
+    except Exception as exc:
+        flash(f"Could not save catalog entry: {exc}", "danger")
+    return redirect(url_for("admin_firmware_catalog"))
+
+
+@app.route("/admin/firmware-catalog/<int:catalog_id>/set-field", methods=["POST"])
+@login_required
+def admin_firmware_catalog_set_field(catalog_id):
+    try:
+        db.set_firmware_catalog_field_deployed(catalog_id)
+        flash("Field-deployed version updated.", "success")
+    except Exception as exc:
+        flash(f"Could not set field-deployed: {exc}", "danger")
+    return redirect(url_for("admin_firmware_catalog"))
+
+
+@app.route("/admin/firmware-catalog/<int:catalog_id>/delete", methods=["POST"])
+@login_required
+def admin_firmware_catalog_delete(catalog_id):
+    try:
+        db.delete_firmware_catalog(catalog_id)
+        flash("Catalog entry deleted.", "success")
+    except Exception as exc:
+        flash(f"Could not delete entry: {exc}", "danger")
+    return redirect(url_for("admin_firmware_catalog"))
+
+
 @app.route("/admin/sql", methods=["GET", "POST"])
 @login_required
 def admin_sql():
@@ -261,7 +352,7 @@ def admin_sql():
         except (ValueError, sqlite3.Error) as exc:
             error = str(exc)
 
-    tables = db.list_tables(include_archives=True)
+    tables = db.list_tables(include_archives=True, include_internal=True)
     return render_template(
         "admin/sql.html",
         tables=tables,
@@ -342,6 +433,7 @@ def admin_history_new():
         event=None,
         boards=boards,
         default_board_id=default_board_id,
+        **_history_catalog_context(boards),
     )
 
 
@@ -366,6 +458,7 @@ def admin_history_edit(event_id):
         event=event,
         boards=boards,
         default_board_id=event["board_id"],
+        **_history_catalog_context(boards),
     )
 
 
@@ -451,6 +544,21 @@ def _board_form_data():
         "gcal_status": request.form.get("gcal_status") or None,
         "adc_status": request.form.get("adc_status") or None,
         "eeprom_status": request.form.get("eeprom_status") or None,
+    }
+
+
+def _history_catalog_context(boards):
+    catalog_by_family = db.firmware_catalog_by_family()
+    catalog_families = {
+        board["board_id"]: db.catalog_family_for_board(
+            board.get("product_name"), board.get("board_name")
+        )
+        or ""
+        for board in boards
+    }
+    return {
+        "catalog_by_family": catalog_by_family,
+        "catalog_families": catalog_families,
     }
 
 

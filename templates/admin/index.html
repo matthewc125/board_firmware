@@ -6,6 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
   <h1 class="h3 mb-0">Admin</h1>
   <div class="d-flex gap-2">
+    <a href="{{ url_for('admin_firmware_catalog') }}" class="btn btn-outline-secondary">Firmware catalog</a>
     <a href="{{ url_for('admin_sql') }}" class="btn btn-outline-secondary">SQL console</a>
     <a href="{{ url_for('admin_deleted') }}" class="btn btn-outline-secondary">Deleted records</a>
     <a href="{{ url_for('admin_history_new') }}" class="btn btn-outline-primary">Add firmware record</a>

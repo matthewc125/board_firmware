@@ -8,7 +8,7 @@
 <div class="row g-4">
   <div class="col-lg-4">
     <div class="card">
-      <div class="card-header">Download CSV</div>
+      <div class="card-header">Downloads</div>
       <div class="list-group list-group-flush">
         {% for t in tables %}
         <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
@@ -17,6 +17,11 @@
           <span class="badge text-bg-light border">{{ t.type }}</span>
         </a>
         {% endfor %}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+           href="{{ url_for('firmware_status_export') }}">
+          firmware_status
+          <span class="badge text-bg-light border">xlsx</span>
+        </a>
       </div>
     </div>
 
@@ -24,7 +29,8 @@
       <div class="card-body small text-muted">
         <p class="mb-1"><strong>boards</strong> — one row per physical board</p>
         <p class="mb-1"><strong>firmware_history</strong> — every flash event</p>
-        <p class="mb-0"><strong>current_firmware</strong> — latest firmware per board</p>
+        <p class="mb-1"><strong>current_firmware</strong> — latest firmware per board</p>
+        <p class="mb-0"><strong>firmware_status</strong> — Tool × board-type matrix (.xlsx)</p>
       </div>
     </div>
   </div>

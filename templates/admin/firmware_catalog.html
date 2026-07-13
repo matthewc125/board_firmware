@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Firmware catalog — Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-0">Firmware catalog</h1>
+    <p class="text-muted small mb-0">
+      Release versions by product family. Mark one field-deployed version per family —
+      used when the firmware-status matrix has no live board reading.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('admin_index') }}" class="btn btn-outline-secondary">Back to admin</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">{{ 'Edit release' if entry else 'Add release' }}</div>
+      <div class="card-body">
+        <form method="post" action="{% if entry %}{{ url_for('admin_firmware_catalog_save', catalog_id=entry.catalog_id) }}{% else %}{{ url_for('admin_firmware_catalog_save') }}{% endif %}">
+          <div class="mb-2">
+            <label class="form-label">Family</label>
+            <input list="family-list" class="form-control form-control-sm" name="family" required
+                   value="{{ entry.family if entry else '' }}" placeholder="BAP, ES4, MFPGA…">
+            <datalist id="family-list">
+              {% for family in families %}
+              <option value="{{ family }}"></option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Version</label>
+            <input class="form-control form-control-sm" name="version" required
+                   value="{{ entry.version if entry else '' }}" placeholder="1.0.34">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">FPGA version (optional)</label>
+            <input class="form-control form-control-sm" name="fpga"
+                   value="{{ entry.fpga if entry and entry.fpga else '' }}"
+                   placeholder="Associated FPGA build">
+            <div class="form-text">Auto-fills on Add firmware record when this release is chosen.</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Release date</label>
+            <input type="date" class="form-control form-control-sm" name="release_date"
+                   value="{{ entry.release_date if entry and entry.release_date else '' }}">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Tools (optional)</label>
+            <input class="form-control form-control-sm" name="tools"
+                   value="{{ entry.tools if entry and entry.tools else '' }}"
+                   placeholder="6,10,11">
+            <div class="form-text">Comma-separated tool numbers for known deployments.</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Notes</label>
+            <textarea class="form-control form-control-sm" name="notes" rows="3">{{ entry.notes if entry and entry.notes else '' }}</textarea>
+          </div>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="is_field_deployed" value="1" id="fieldDeployed"
+                   {% if entry and entry.is_field_deployed %}checked{% endif %}>
+            <label class="form-check-label" for="fieldDeployed">Field deployed for this family</label>
+          </div>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="in_status_ranking" value="1" id="inStatusRanking"
+                   {% if not entry or entry.in_status_ranking %}checked{% endif %}>
+            <label class="form-check-label" for="inStatusRanking">Count in status color ranking</label>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+            {% if entry %}
+            <a href="{{ url_for('admin_firmware_catalog') }}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            {% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    {% if not catalog %}
+      <p class="text-muted">No catalog entries yet.</p>
+    {% endif %}
+    {% for family, rows in catalog_by_family %}
+      <h2 class="h5 mt-3">{{ family }}</h2>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Version</th>
+              <th>FPGA</th>
+              <th>Date</th>
+              <th>Tools</th>
+              <th>Field</th>
+              <th>Notes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td><code>{{ row.version }}</code></td>
+              <td>{% if row.fpga %}<code>{{ row.fpga }}</code>{% else %}—{% endif %}</td>
+              <td>{{ row.release_date or '—' }}</td>
+              <td>{{ row.tools or '—' }}</td>
+              <td>
+                {% if row.is_field_deployed %}
+                <span class="badge text-bg-success">field</span>
+                {% else %}
+                <form method="post" action="{{ url_for('admin_firmware_catalog_set_field', catalog_id=row.catalog_id) }}" class="d-inline">
+                  <button type="submit" class="btn btn-link btn-sm p-0">Set field</button>
+                </form>
+                {% endif %}
+              </td>
+              <td class="small">{{ row.notes or '—' }}</td>
+              <td class="text-end text-nowrap">
+                <a class="small me-2" href="{{ url_for('admin_firmware_catalog', edit=row.catalog_id) }}">Edit</a>
+                <form method="post" action="{{ url_for('admin_firmware_catalog_delete', catalog_id=row.catalog_id) }}" class="d-inline"
+                      onsubmit="return confirm('Delete {{ row.family }} {{ row.version }}?')">
+                  <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
