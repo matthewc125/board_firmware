@@ -381,7 +381,6 @@ def admin_sql():
         tables=tables,
         archive_tables=db.ARCHIVE_TABLES,
         table_queries={t["name"]: db.table_preview_query(t["name"]) for t in tables},
-        sql_schema=db.sql_autocomplete_schema(),
         query=query,
         columns=columns,
         rows=rows,

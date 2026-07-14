@@ -37,11 +37,6 @@ code {
   min-height: 14rem;
 }
 
-.sql-inline-ghost {
-  color: #adb5bd;
-  opacity: 0.85;
-}
-
 .table-scroll-panel {
   max-height: 26rem;
   overflow: auto;

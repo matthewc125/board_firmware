@@ -1075,15 +1075,6 @@ def table_preview_query(table_name):
     return f"SELECT * FROM {table_name}"
 
 
-def sql_autocomplete_schema():
-    schema = {}
-    for table in list_tables(include_archives=True, include_internal=True):
-        name = table["name"]
-        cols = fetch_all(f"PRAGMA table_info({name})")
-        schema[name] = [col["name"] for col in cols]
-    return schema
-
-
 def _query_tokens(upper_sql):
     return set(re.findall(r"\b[A-Z_]+\b", upper_sql))
 
