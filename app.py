@@ -8,6 +8,7 @@ from flask import (
     Flask,
     Response,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -237,6 +238,12 @@ def admin_index():
     )
 
 
+@app.route("/admin/publish-database/preview", methods=["GET"])
+@login_required
+def admin_publish_database_preview():
+    return jsonify(publish_database.preview_database_publish())
+
+
 @app.route("/admin/publish-database", methods=["POST"])
 @login_required
 def admin_publish_database():
@@ -245,7 +252,9 @@ def admin_publish_database():
     message = result["message"]
     detail = (result.get("detail") or "").strip()
     if detail:
-        message = f"{message} {detail}"
+        # Keep flash short; full git noise is often huge
+        first_line = detail.splitlines()[0]
+        message = f"{message} ({first_line})"
     flash(message, category)
     return redirect(url_for("admin_index"))
 

@@ -6,10 +6,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
   <h1 class="h3 mb-0">Admin</h1>
   <div class="d-flex gap-2 flex-wrap">
-    <form method="post" action="{{ url_for('admin_publish_database') }}" class="d-inline"
-          onsubmit="return confirm('Commit and push the current board_firmware.db to GitHub? Pages will rebuild from that database.');">
-      <button type="submit" class="btn btn-outline-success">Push DB to GitHub</button>
-    </form>
+    <button type="button" class="btn btn-outline-success" id="publish-db-open">Push DB to GitHub</button>
     <a href="{{ url_for('admin_firmware_catalog') }}" class="btn btn-outline-secondary">Firmware catalog</a>
     <a href="{{ url_for('admin_sql') }}" class="btn btn-outline-secondary">SQL console</a>
     <a href="{{ url_for('admin_deleted') }}" class="btn btn-outline-secondary">Deleted records</a>
@@ -69,4 +66,135 @@
     </ul>
   </div>
 </div>
+
+<div class="modal fade" id="publishDbModal" tabindex="-1" aria-labelledby="publishDbModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-5" id="publishDbModalLabel">Publish database to GitHub</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="publish-db-loading" class="text-muted">Comparing local database to origin/main…</div>
+        <div id="publish-db-error" class="alert alert-danger d-none mb-0"></div>
+        <div id="publish-db-result" class="d-none">
+          <p id="publish-db-message" class="mb-3"></p>
+          <div id="publish-db-summary" class="mb-3"></div>
+          <div id="publish-db-sections"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" action="{{ url_for('admin_publish_database') }}" id="publish-db-form">
+          <button type="submit" class="btn btn-success" id="publish-db-confirm" disabled>Confirm push</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const openBtn = document.getElementById("publish-db-open");
+  const modalEl = document.getElementById("publishDbModal");
+  if (!openBtn || !modalEl) return;
+
+  const modal = new bootstrap.Modal(modalEl);
+  const loading = document.getElementById("publish-db-loading");
+  const errorBox = document.getElementById("publish-db-error");
+  const resultBox = document.getElementById("publish-db-result");
+  const messageEl = document.getElementById("publish-db-message");
+  const summaryEl = document.getElementById("publish-db-summary");
+  const sectionsEl = document.getElementById("publish-db-sections");
+  const confirmBtn = document.getElementById("publish-db-confirm");
+  const previewUrl = {{ url_for('admin_publish_database_preview') | tojson }};
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function resetModal() {
+    loading.classList.remove("d-none");
+    errorBox.classList.add("d-none");
+    errorBox.textContent = "";
+    resultBox.classList.add("d-none");
+    summaryEl.innerHTML = "";
+    sectionsEl.innerHTML = "";
+    messageEl.textContent = "";
+    confirmBtn.disabled = true;
+  }
+
+  function renderPreview(data) {
+    loading.classList.add("d-none");
+    if (!data.ok) {
+      errorBox.textContent = data.message + (data.detail ? " " + data.detail : "");
+      errorBox.classList.remove("d-none");
+      return;
+    }
+
+    resultBox.classList.remove("d-none");
+    messageEl.textContent = data.message || "";
+
+    const s = data.summary || {};
+    const chips = [
+      ["Boards +", s.boards_added],
+      ["Boards −", s.boards_removed],
+      ["Boards edited", s.boards_changed],
+      ["Firmware", s.firmware_changed],
+      ["Catalog +", s.catalog_added],
+      ["Catalog −", s.catalog_removed],
+      ["Catalog edited", s.catalog_changed],
+      ["History +", s.history_added],
+      ["History −", s.history_removed],
+    ].filter(([, n]) => n);
+    summaryEl.innerHTML = chips.length
+      ? `<div class="d-flex flex-wrap gap-2">${chips.map(([label, n]) =>
+          `<span class="badge text-bg-light border">${escapeHtml(label)}: ${n}</span>`
+        ).join("")}</div>`
+      : `<p class="text-muted small mb-0">No row-level differences detected.</p>`;
+
+    sectionsEl.innerHTML = (data.sections || []).map((section) => {
+      const items = (section.items || [])
+        .map((item) => `<li class="small">${escapeHtml(item)}</li>`)
+        .join("");
+      return `
+        <div class="mb-3">
+          <h3 class="h6 mb-1">${escapeHtml(section.title)}
+            <span class="text-muted fw-normal">(${section.count})</span>
+          </h3>
+          ${items ? `<ul class="mb-0 ps-3">${items}</ul>` : ""}
+        </div>`;
+    }).join("");
+
+    confirmBtn.disabled = false;
+  }
+
+  openBtn.addEventListener("click", async () => {
+    resetModal();
+    modal.show();
+    try {
+      const response = await fetch(previewUrl, { headers: { Accept: "application/json" } });
+      if (!response.ok) {
+        throw new Error(`Preview failed (${response.status})`);
+      }
+      renderPreview(await response.json());
+    } catch (err) {
+      loading.classList.add("d-none");
+      errorBox.textContent = err.message || String(err);
+      errorBox.classList.remove("d-none");
+    }
+  });
+
+  document.getElementById("publish-db-form").addEventListener("submit", () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Pushing…";
+  });
+})();
+</script>
 {% endblock %}
