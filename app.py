@@ -19,6 +19,7 @@ from flask import (
 import config
 import db
 import firmware_status_report
+import publish_database
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.SECRET_KEY
@@ -234,6 +235,19 @@ def admin_index():
         boards=db.list_boards(sort="board_id"),
         recent=db.recent_installs(5),
     )
+
+
+@app.route("/admin/publish-database", methods=["POST"])
+@login_required
+def admin_publish_database():
+    result = publish_database.publish_database_to_github()
+    category = "success" if result["ok"] else "danger"
+    message = result["message"]
+    detail = (result.get("detail") or "").strip()
+    if detail:
+        message = f"{message} {detail}"
+    flash(message, category)
+    return redirect(url_for("admin_index"))
 
 
 @app.route("/admin/firmware-catalog", methods=["GET"])

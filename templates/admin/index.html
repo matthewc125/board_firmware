@@ -5,7 +5,11 @@
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
   <h1 class="h3 mb-0">Admin</h1>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
+    <form method="post" action="{{ url_for('admin_publish_database') }}" class="d-inline"
+          onsubmit="return confirm('Commit and push the current board_firmware.db to GitHub? Pages will rebuild from that database.');">
+      <button type="submit" class="btn btn-outline-success">Push DB to GitHub</button>
+    </form>
     <a href="{{ url_for('admin_firmware_catalog') }}" class="btn btn-outline-secondary">Firmware catalog</a>
     <a href="{{ url_for('admin_sql') }}" class="btn btn-outline-secondary">SQL console</a>
     <a href="{{ url_for('admin_deleted') }}" class="btn btn-outline-secondary">Deleted records</a>
