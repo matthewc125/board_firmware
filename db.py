@@ -384,6 +384,7 @@ def ensure_schema():
             """
         )
         ensure_firmware_catalog(conn)
+        ensure_firmware_status_config(conn)
         conn.commit()
     finally:
         conn.close()
@@ -753,6 +754,100 @@ def insert_board_event(data):
         f"INSERT INTO board_events ({', '.join(cols)}) VALUES ({placeholders})",
         values,
     )
+
+
+def get_board_event(event_id):
+    return fetch_one("SELECT * FROM board_events WHERE event_id = ?", (event_id,))
+
+
+def update_board_event(event_id, data):
+    cols = [c for c in BOARD_EVENT_COLUMNS if c != "event_id"]
+    sets = ", ".join(f"{c} = ?" for c in cols)
+    values = [data.get(c) for c in cols] + [event_id]
+    execute(f"UPDATE board_events SET {sets} WHERE event_id = ?", values)
+
+
+def delete_board_event(event_id):
+    return execute("DELETE FROM board_events WHERE event_id = ?", (event_id,))
+
+
+def normalize_tool_name(tool):
+    """Normalize user-entered tool labels to ToolN / Unassigned / free text."""
+    if tool is None:
+        return None
+    text = str(tool).strip()
+    if not text:
+        return None
+    if text.lower() in {"unassigned", "none", "n/a"}:
+        return None
+    match = re.fullmatch(r"(?i)tool[\s\-_/]*(\d+)", text)
+    if match:
+        return f"Tool{int(match.group(1))}"
+    return text
+
+
+def set_board_tool(board_id, tool):
+    execute("UPDATE boards SET tool = ? WHERE board_id = ?", (tool, board_id))
+
+
+def record_board_move(
+    board_id,
+    new_tool,
+    *,
+    event_date=None,
+    event_time=None,
+    description=None,
+    source="admin",
+    source_ref=None,
+    update_location=True,
+):
+    """Insert a move/install board event and optionally update boards.tool."""
+    board = get_board(board_id)
+    if not board:
+        raise ValueError(f"Board {board_id} not found.")
+
+    tool = normalize_tool_name(new_tool)
+    if not tool:
+        raise ValueError("Destination tool is required.")
+
+    old_tool = board.get("tool")
+    if description is None:
+        if old_tool and old_tool != tool:
+            description = f"Moved from {old_tool} to {tool}"
+        else:
+            description = f"Installed on {tool}"
+
+    if event_date is None:
+        event_date = datetime.now().strftime("%Y-%m-%d")
+
+    event_id = None
+    with get_db() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO board_events (
+                board_id, event_date, event_time, event_type,
+                description, tool, source, source_ref
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                board_id,
+                event_date,
+                event_time,
+                "install",
+                description,
+                tool,
+                source,
+                source_ref,
+            ),
+        )
+        event_id = cur.lastrowid
+        if update_location:
+            conn.execute(
+                "UPDATE boards SET tool = ? WHERE board_id = ?",
+                (tool, board_id),
+            )
+        conn.commit()
+    return event_id
 
 
 def get_history_event(event_id):
@@ -1206,7 +1301,8 @@ STATUS_COLUMN_FAMILY = {
 # Display / admin order for catalog families.
 CATALOG_FAMILY_ORDER = ("BAP", "ES4", "EM1", "OBJ", "MFPGA", "PIB", "FF")
 
-# Status report always shows the field-deployed version for these columns.
+# When no live board reading exists, these columns default to the catalog
+# field-deployed version (instead of tool-specific catalog assignments).
 STATUS_FIXED_FIELD_COLUMNS = frozenset({"EM1", "OBJ"})
 
 
@@ -1218,7 +1314,34 @@ NON_EXPORT_TABLES = frozenset({
     "app_meta",
     "import_runs",
     "board_events",
+    "firmware_status_layout",
+    "firmware_status_overrides",
 })
+
+FIRMWARE_STATUS_LAYOUT_DDL = """
+CREATE TABLE IF NOT EXISTS firmware_status_layout (
+    section_key TEXT NOT NULL,
+    tool_num    INTEGER NOT NULL,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (section_key, tool_num)
+);
+
+CREATE TABLE IF NOT EXISTS firmware_status_overrides (
+    tool_num    INTEGER NOT NULL,
+    column_key  TEXT NOT NULL,
+    firmware    TEXT,
+    PRIMARY KEY (tool_num, column_key)
+);
+"""
+
+# Default tool grouping for the status page / Excel sections.
+DEFAULT_FIRMWARE_STATUS_LAYOUT = (
+    ("in_house", "In house", (9, 13, 14)),
+    ("demo", "Demo", (6,)),
+    ("field", "Field deployed", (1, 5, 7, 8, 10)),
+)
+
+STATUS_SECTION_TITLES = {key: title for key, title, _ in DEFAULT_FIRMWARE_STATUS_LAYOUT}
 
 
 FIRMWARE_CATALOG_DDL = """
@@ -1680,11 +1803,33 @@ def _rank_versions(versions):
     if len(ordered) == 1:
         ranks[ordered[0]] = "newest"
         return ranks
-    ranks[ordered[-1]] = "newest"
+    newest = ordered[-1]
+    ranks[newest] = "newest"
     ranks[ordered[0]] = "oldest"
     for mid in ordered[1:-1]:
         ranks[mid] = "middle"
+
+    # Shorter forms of the newest release count as newest too
+    # (e.g. "1.04.38" ranks with "1.04.38.01").
+    newest_key = firmware_version_key(newest)
+    for version in ordered[:-1]:
+        key = firmware_version_key(version)
+        if key and newest_key[: len(key)] == key:
+            ranks[version] = "newest"
     return ranks
+
+
+def _newest_live_source(sources):
+    """Pick the source with the highest firmware version (stable by board_id)."""
+    if not sources:
+        return None
+    return max(
+        sources,
+        key=lambda entry: (
+            firmware_version_key(entry.get("firmware")),
+            entry.get("board_id") or 0,
+        ),
+    )
 
 
 def _rank_versions_for_column(column_label, observed_versions, family_versions=None):
@@ -1701,20 +1846,237 @@ def _rank_versions_for_column(column_label, observed_versions, family_versions=N
     return _rank_versions(universe)
 
 
-def firmware_status_matrix(min_tools=13):
-    """
-    Tool × board-type matrix of current firmware for numbered tools only.
+def ensure_firmware_status_config(conn):
+    """Create layout/override tables and seed defaults when layout is empty."""
+    conn.executescript(FIRMWARE_STATUS_LAYOUT_DDL)
+    count = conn.execute("SELECT COUNT(*) AS n FROM firmware_status_layout").fetchone()["n"]
+    if count:
+        return
 
-    Columns match the field status spreadsheet. Only live ``boards`` /
-    ``current_firmware`` rows are used (never deleted archives). Missing
-    cells (or ``field deployed`` placeholders) use catalog tool assignments,
-    then the family's field-deployed version from the firmware catalog.
+    for section_key, _title, tool_nums in DEFAULT_FIRMWARE_STATUS_LAYOUT:
+        for order, tool_num in enumerate(tool_nums):
+            conn.execute(
+                """
+                INSERT INTO firmware_status_layout (section_key, tool_num, sort_order)
+                VALUES (?, ?, ?)
+                """,
+                (section_key, tool_num, order),
+            )
+
+    # Tool 14: ES4 at 1.04.38 (suffix TBD); other columns blank for now.
+    for column_key in FIRMWARE_STATUS_COLUMNS:
+        firmware = "1.04.38" if column_key.startswith("ES4") else None
+        conn.execute(
+            """
+            INSERT INTO firmware_status_overrides (tool_num, column_key, firmware)
+            VALUES (14, ?, ?)
+            """,
+            (column_key, firmware),
+        )
+
+
+def get_firmware_status_layout():
+    """Return ordered section specs with tool numbers from the DB (or defaults)."""
+    rows = fetch_all(
+        """
+        SELECT section_key, tool_num, sort_order
+        FROM firmware_status_layout
+        ORDER BY
+            CASE section_key
+                WHEN 'in_house' THEN 1
+                WHEN 'demo' THEN 2
+                WHEN 'field' THEN 3
+                ELSE 4
+            END,
+            sort_order ASC,
+            tool_num ASC
+        """
+    )
+    by_section = {key: [] for key, _title, _tools in DEFAULT_FIRMWARE_STATUS_LAYOUT}
+    for row in rows:
+        key = row["section_key"]
+        by_section.setdefault(key, []).append(int(row["tool_num"]))
+
+    if not any(by_section.values()):
+        return [
+            {
+                "key": key,
+                "title": title,
+                "tool_nums": list(tool_nums),
+            }
+            for key, title, tool_nums in DEFAULT_FIRMWARE_STATUS_LAYOUT
+        ]
+
+    sections = []
+    for key, title, _default_tools in DEFAULT_FIRMWARE_STATUS_LAYOUT:
+        sections.append(
+            {
+                "key": key,
+                "title": STATUS_SECTION_TITLES.get(key, title),
+                "tool_nums": by_section.get(key, []),
+            }
+        )
+    for key, tool_nums in by_section.items():
+        if key in STATUS_SECTION_TITLES:
+            continue
+        sections.append(
+            {
+                "key": key,
+                "title": key.replace("_", " ").title(),
+                "tool_nums": tool_nums,
+            }
+        )
+    return sections
+
+
+def save_firmware_status_layout(sections):
     """
+    Replace layout rows.
+
+    ``sections`` is an iterable of dicts with ``key`` and ``tool_nums`` (ints).
+    A tool may only appear in one section; later sections win on conflict.
+    """
+    claimed = {}
+    cleaned = []
+    for section in sections:
+        key = (section.get("key") or "").strip()
+        if not key:
+            continue
+        nums = []
+        for raw in section.get("tool_nums") or []:
+            try:
+                num = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if num <= 0:
+                continue
+            nums.append(num)
+            claimed[num] = key
+        cleaned.append({"key": key, "tool_nums": nums})
+
+    # Re-filter so each tool appears only in its final claimed section.
+    with get_db() as conn:
+        conn.execute("DELETE FROM firmware_status_layout")
+        for section in cleaned:
+            order = 0
+            for tool_num in section["tool_nums"]:
+                if claimed.get(tool_num) != section["key"]:
+                    continue
+                conn.execute(
+                    """
+                    INSERT INTO firmware_status_layout (section_key, tool_num, sort_order)
+                    VALUES (?, ?, ?)
+                    """,
+                    (section["key"], tool_num, order),
+                )
+                order += 1
+        conn.commit()
+
+
+def get_firmware_status_overrides():
+    rows = fetch_all(
+        "SELECT tool_num, column_key, firmware FROM firmware_status_overrides"
+    )
+    return {
+        (int(row["tool_num"]), row["column_key"]): row["firmware"]
+        for row in rows
+    }
+
+
+def save_firmware_status_overrides(entries):
+    """
+    Replace overrides for the provided cells.
+
+    Each entry: ``{tool_num, column_key, mode, firmware}``
+    mode: ``auto`` (delete), ``blank`` (null firmware), ``value`` (set firmware).
+    """
+    with get_db() as conn:
+        for entry in entries:
+            tool_num = int(entry["tool_num"])
+            column_key = entry["column_key"]
+            if column_key not in FIRMWARE_STATUS_COLUMNS:
+                continue
+            mode = entry.get("mode") or "auto"
+            conn.execute(
+                """
+                DELETE FROM firmware_status_overrides
+                WHERE tool_num = ? AND column_key = ?
+                """,
+                (tool_num, column_key),
+            )
+            if mode == "blank":
+                conn.execute(
+                    """
+                    INSERT INTO firmware_status_overrides (tool_num, column_key, firmware)
+                    VALUES (?, ?, NULL)
+                    """,
+                    (tool_num, column_key),
+                )
+            elif mode == "value":
+                firmware = (entry.get("firmware") or "").strip()
+                if not firmware:
+                    conn.execute(
+                        """
+                        INSERT INTO firmware_status_overrides (tool_num, column_key, firmware)
+                        VALUES (?, ?, NULL)
+                        """,
+                        (tool_num, column_key),
+                    )
+                else:
+                    conn.execute(
+                        """
+                        INSERT INTO firmware_status_overrides (tool_num, column_key, firmware)
+                        VALUES (?, ?, ?)
+                        """,
+                        (tool_num, column_key, firmware),
+                    )
+        conn.commit()
+
+
+def _status_cell_rank(firmwares, rank_map):
+    version_ranks = {rank_map.get(fw) for fw in firmwares}
+    version_ranks.discard(None)
+    if not version_ranks:
+        return None
+    if len(firmwares) <= 1:
+        return next(iter(version_ranks))
+    if "oldest" in version_ranks:
+        return "oldest"
+    if version_ranks == {"newest"}:
+        return "newest"
+    return "middle"
+
+
+def firmware_status_matrix(min_tools=None):
+    """
+    Tool × board-type matrix of current firmware for configured status tools.
+
+    Live board / current_firmware rows take priority (with board links).
+    Otherwise admin overrides apply (including forced blanks). Otherwise catalog
+    defaults fill the cell. Only tools listed in firmware_status_layout are shown.
+    """
+    del min_tools  # retained for call-site compatibility; layout drives tool set
     columns = [{"key": label, "label": label} for label in FIRMWARE_STATUS_COLUMNS]
+    layout = get_firmware_status_layout()
+    tool_nums = []
+    seen = set()
+    for section in layout:
+        for tool_num in section["tool_nums"]:
+            if tool_num not in seen:
+                seen.add(tool_num)
+                tool_nums.append(tool_num)
+
+    if not tool_nums:
+        return {"columns": columns, "rows": [], "layout": layout}
+
+    overrides = get_firmware_status_overrides()
+    live_by_cell = {}
+    es4_status_columns = ("ES4 USF", "ES4 LSF", "ES4 Blanker")
 
     rows = fetch_all(
         """
         SELECT
+            b.board_id,
             b.tool,
             b.product_name,
             b.board_name,
@@ -1727,45 +2089,83 @@ def firmware_status_matrix(min_tools=13):
         """
     )
 
-    by_tool_col = {}
-    max_tool = 0
-    es4_status_columns = ("ES4 USF", "ES4 LSF", "ES4 Blanker")
-
     for row in rows:
         tool_num = parse_tool_number(row["tool"])
-        if tool_num is None:
+        if tool_num is None or tool_num not in seen:
             continue
-        max_tool = max(max_tool, tool_num)
         column = map_board_to_status_column(row["product_name"], row["board_name"])
         if column is None:
             continue
-        if column in STATUS_FIXED_FIELD_COLUMNS:
-            continue
         target_columns = es4_status_columns if column == "ES4" else (column,)
+        live_fw = (row["firmware"] or "").strip()
+        if live_fw.lower() == FIELD_DEPLOYED_LABEL:
+            live_fw = ""
         for target in target_columns:
-            firmware = _resolve_status_firmware(row["firmware"], target, tool_num)
-            if firmware:
-                by_tool_col.setdefault((tool_num, target), set()).add(firmware)
+            if not live_fw:
+                continue
+            live_by_cell.setdefault((tool_num, target), []).append(
+                {
+                    "board_id": row["board_id"],
+                    "firmware": live_fw,
+                }
+            )
 
-    tool_count = max(min_tools, max_tool) if (max_tool or columns) else 0
-
-    for tool_num in range(1, tool_count + 1):
+    resolved = {}
+    for tool_num in tool_nums:
         for col in FIRMWARE_STATUS_COLUMNS:
             key = (tool_num, col)
+            live_entries = live_by_cell.get(key, [])
+            if live_entries:
+                # Deduplicate by board_id, keep order.
+                by_board = {}
+                for entry in live_entries:
+                    by_board[entry["board_id"]] = entry
+                sources = list(by_board.values())
+                # EM1 tools often have many boards on the same release; status
+                # matrix / xlsx only need the newest firmware on that tool.
+                if col == "EM1" and len(sources) > 1:
+                    best = _newest_live_source(sources)
+                    sources = [best] if best else sources[:1]
+                firmwares = [entry["firmware"] for entry in sources]
+                resolved[key] = {
+                    "firmwares": firmwares,
+                    "sources": sources,
+                    "source_kind": "live",
+                }
+                continue
+
+            if key in overrides:
+                override = overrides[key]
+                text = (override or "").strip()
+                resolved[key] = {
+                    "firmwares": [text] if text else [],
+                    "sources": [],
+                    "source_kind": "override" if text else "blank",
+                }
+                continue
+
             if col in STATUS_FIXED_FIELD_COLUMNS:
                 fixed = catalog_field_deployed_version(
                     STATUS_COLUMN_FAMILY[col]
                 ) or "2.0.1.6"
-                by_tool_col[key] = {fixed}
+                resolved[key] = {
+                    "firmwares": [fixed] if fixed else [],
+                    "sources": [],
+                    "source_kind": "catalog",
+                }
                 continue
-            if key not in by_tool_col:
-                filled = default_status_firmware(col, tool_num)
-                by_tool_col[key] = {filled} if filled else set()
+
+            filled = default_status_firmware(col, tool_num)
+            resolved[key] = {
+                "firmwares": [filled] if filled else [],
+                "sources": [],
+                "source_kind": "catalog" if filled else "blank",
+            }
 
     versions_by_col = {label: set() for label in FIRMWARE_STATUS_COLUMNS}
-    for (_tool_num, column), firmwares in by_tool_col.items():
+    for (_tool_num, column), cell in resolved.items():
         versions_by_col[column].update(
-            fw for fw in firmwares if fw and fw.lower() != FIELD_DEPLOYED_LABEL
+            fw for fw in cell["firmwares"] if fw and fw.lower() != FIELD_DEPLOYED_LABEL
         )
 
     family_versions = {}
@@ -1783,36 +2183,37 @@ def firmware_status_matrix(min_tools=13):
     }
 
     matrix_rows = []
-    for tool_num in range(1, tool_count + 1):
+    for tool_num in tool_nums:
         cells = []
         for col in columns:
+            cell = resolved.get((tool_num, col["key"]), {
+                "firmwares": [],
+                "sources": [],
+                "source_kind": "blank",
+            })
             firmwares = sorted(
-                (
-                    fw
-                    for fw in by_tool_col.get((tool_num, col["key"]), set())
-                    if fw and fw.lower() != FIELD_DEPLOYED_LABEL
-                ),
+                {fw for fw in cell["firmwares"] if fw},
                 key=lambda value: (firmware_version_key(value), value),
             )
+            sources = sorted(
+                cell["sources"],
+                key=lambda entry: (
+                    firmware_version_key(entry["firmware"]),
+                    entry["firmware"],
+                    entry["board_id"],
+                ),
+            )
             display = " / ".join(firmwares)
-            version_ranks = {rank_by_col[col["key"]].get(fw) for fw in firmwares}
-            version_ranks.discard(None)
-            if not version_ranks:
-                rank = None
-            elif len(firmwares) <= 1:
-                rank = next(iter(version_ranks))
-            elif "oldest" in version_ranks:
-                rank = "oldest"
-            elif version_ranks == {"newest"}:
-                rank = "newest"
-            else:
-                rank = "middle"
-
             cells.append(
                 {
+                    "column_key": col["key"],
                     "firmware": display,
-                    "rank": rank,
+                    "rank": _status_cell_rank(firmwares, rank_by_col[col["key"]]),
                     "versions": firmwares,
+                    "sources": sources,
+                    "source_kind": cell["source_kind"],
+                    "is_live": cell["source_kind"] == "live",
+                    "override": overrides.get((tool_num, col["key"]), "__missing__"),
                 }
             )
         matrix_rows.append(
@@ -1823,7 +2224,28 @@ def firmware_status_matrix(min_tools=13):
             }
         )
 
-    return {"columns": columns, "rows": matrix_rows}
+    return {"columns": columns, "rows": matrix_rows, "layout": layout}
+
+
+def firmware_status_sections(min_tools=None):
+    """Group the firmware status matrix into configured sections."""
+    matrix = firmware_status_matrix(min_tools=min_tools)
+    rows_by_num = {row["tool_num"]: row for row in matrix["rows"]}
+    sections = []
+    for spec in matrix["layout"]:
+        sections.append(
+            {
+                "key": spec["key"],
+                "title": spec["title"],
+                "tool_nums": list(spec["tool_nums"]),
+                "rows": [
+                    rows_by_num[num]
+                    for num in spec["tool_nums"]
+                    if num in rows_by_num
+                ],
+            }
+        )
+    return {"columns": matrix["columns"], "sections": sections, "rows": matrix["rows"]}
 
 
 ensure_schema()

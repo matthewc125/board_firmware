@@ -1072,6 +1072,9 @@
       case "index":
         renderIndex();
         break;
+      case "status":
+        // Pre-rendered at build time from the same matrix as the .xlsx export.
+        break;
       case "hardware":
         renderHardware();
         break;

@@ -23,7 +23,7 @@ import firmware_status_report  # noqa: E402
 
 STATIC_SITE_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT = PROJECT_ROOT / "site"
-PAGES = ("index", "hardware", "board", "data")
+PAGES = ("index", "status", "hardware", "board", "data")
 
 
 def normalize_base_path(value: str) -> str:
@@ -80,6 +80,7 @@ def render_pages(
     built_at: str,
     csv_exports: list[dict],
     firmware_status: dict | None = None,
+    status_matrix: dict | None = None,
 ) -> None:
     env = Environment(
         loader=FileSystemLoader(STATIC_SITE_DIR / "templates"),
@@ -90,6 +91,8 @@ def render_pages(
         "built_at": built_at,
         "csv_exports": csv_exports,
         "firmware_status": firmware_status,
+        "status_columns": status_matrix["columns"] if status_matrix else [],
+        "status_sections": status_matrix["sections"] if status_matrix else [],
         "page": "",
     }
     for page in PAGES:
@@ -110,7 +113,15 @@ def build(output_dir: Path, base_path: str) -> None:
     data_dir = output_dir / "data"
     csv_exports = export_csvs(data_dir)
     firmware_status = export_firmware_status(data_dir)
-    render_pages(output_dir, base_path, built_at, csv_exports, firmware_status)
+    status_matrix = db.firmware_status_sections()
+    render_pages(
+        output_dir,
+        base_path,
+        built_at,
+        csv_exports,
+        firmware_status,
+        status_matrix=status_matrix,
+    )
 
     print(f"Built static site in {output_dir}")
     print(f"Base path: {base_path}")

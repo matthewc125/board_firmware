@@ -69,3 +69,67 @@ code {
 .table-scroll-panel thead th.col-verified {
   z-index: 3;
 }
+
+.fw-status-table-wrap {
+  background-color: #fff;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+
+.fw-status-table {
+  margin-bottom: 0;
+}
+
+.fw-status-table thead th {
+  background-color: #d9e2f3;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.fw-status-table tbody th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.fw-status-table td code {
+  color: inherit;
+  background: transparent;
+}
+
+.fw-rank-newest {
+  background-color: #92d050 !important;
+}
+
+.fw-rank-middle {
+  background-color: #ffff00 !important;
+}
+
+.fw-rank-oldest {
+  background-color: #ff6b6b !important;
+}
+
+.fw-rank-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid #adb5bd;
+  border-radius: 0.15rem;
+  vertical-align: -0.1rem;
+  margin-right: 0.25rem;
+}
+
+.fw-status-live-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.fw-status-live-link:hover {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.fw-status-edit-cell {
+  min-width: 7.5rem;
+  vertical-align: top !important;
+}

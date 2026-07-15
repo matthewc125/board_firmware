@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import sqlite3
+from datetime import date
 from functools import wraps
 
 from flask import (
@@ -109,6 +110,86 @@ def index():
 @app.route("/boards")
 def boards():
     return redirect(url_for("index", **request.args))
+
+
+@app.route("/status")
+def status():
+    matrix = db.firmware_status_sections()
+    return render_template(
+        "status.html",
+        columns=matrix["columns"],
+        sections=matrix["sections"],
+    )
+
+
+@app.route("/admin/status/layout", methods=["GET", "POST"])
+@login_required
+def admin_status_layout():
+    if request.method == "POST":
+        sections = []
+        for spec in db.get_firmware_status_layout():
+            raw = request.form.get(f"tools_{spec['key']}", "")
+            nums = []
+            for part in raw.replace(";", ",").split(","):
+                part = part.strip().lower().replace("tool", "").strip()
+                if not part:
+                    continue
+                try:
+                    nums.append(int(part))
+                except ValueError:
+                    continue
+            sections.append({"key": spec["key"], "tool_nums": nums})
+        try:
+            db.save_firmware_status_layout(sections)
+            flash("Status tool layout saved.", "success")
+            return redirect(url_for("status"))
+        except Exception as exc:
+            flash(f"Could not save layout: {exc}", "danger")
+    return render_template(
+        "admin/status_layout.html",
+        sections=db.get_firmware_status_layout(),
+    )
+
+
+@app.route("/admin/status/firmware", methods=["GET", "POST"])
+@login_required
+def admin_status_firmware():
+    matrix = db.firmware_status_sections()
+    if request.method == "POST":
+        entries = []
+        for key, value in request.form.items():
+            if not key.startswith("mode_"):
+                continue
+            field = key[len("mode_") :]
+            tool_raw = request.form.get(f"tool_{field}")
+            column_key = request.form.get(f"column_{field}")
+            if not tool_raw or not column_key:
+                continue
+            try:
+                tool_num = int(tool_raw)
+            except ValueError:
+                continue
+            mode = (value or "auto").strip()
+            entries.append(
+                {
+                    "tool_num": tool_num,
+                    "column_key": column_key,
+                    "mode": mode,
+                    "firmware": request.form.get(f"firmware_{field}") or "",
+                }
+            )
+        try:
+            db.save_firmware_status_overrides(entries)
+            flash("Status firmware overrides saved.", "success")
+            return redirect(url_for("status"))
+        except Exception as exc:
+            flash(f"Could not save firmware overrides: {exc}", "danger")
+        matrix = db.firmware_status_sections()
+    return render_template(
+        "admin/status_firmware.html",
+        columns=matrix["columns"],
+        sections=matrix["sections"],
+    )
 
 
 @app.route("/hardware", endpoint="hardware")
@@ -437,6 +518,95 @@ def admin_board_delete(board_id):
     return redirect(url_for("admin_index"))
 
 
+BOARD_EVENT_TYPES = (
+    "install",
+    "remove",
+    "location",
+    "receive",
+    "repair",
+    "test",
+    "note",
+)
+
+
+@app.route("/admin/event/new", methods=["GET", "POST"])
+@login_required
+def admin_event_new():
+    boards = db.list_boards(sort="board_id")
+    default_board_id = request.args.get("board_id", type=int)
+    default_tool = request.args.get("tool") or ""
+    if request.method == "POST":
+        data = _event_form_data()
+        try:
+            db.insert_board_event(data)
+            if request.form.get("update_location") and data.get("tool"):
+                db.set_board_tool(data["board_id"], data["tool"])
+            flash("Board event added.", "success")
+            return redirect(url_for("board_detail", board_id=data["board_id"]))
+        except Exception as exc:
+            flash(f"Could not add event: {exc}", "danger")
+    return render_template(
+        "admin/event_form.html",
+        event=None,
+        boards=boards,
+        default_board_id=default_board_id,
+        default_date=date.today().isoformat(),
+        default_event_type="install",
+        default_tool=default_tool,
+        default_description="",
+        update_location_default=True,
+        event_types=BOARD_EVENT_TYPES,
+    )
+
+
+@app.route("/admin/event/<int:event_id>/edit", methods=["GET", "POST"])
+@login_required
+def admin_event_edit(event_id):
+    event = db.get_board_event(event_id)
+    if not event:
+        flash("Event not found.", "danger")
+        return redirect(url_for("admin_index"))
+    boards = db.list_boards(sort="board_id")
+    if request.method == "POST":
+        data = _event_form_data()
+        try:
+            db.update_board_event(event_id, data)
+            if request.form.get("update_location") and data.get("tool"):
+                db.set_board_tool(data["board_id"], data["tool"])
+            flash("Board event updated.", "success")
+            return redirect(url_for("board_detail", board_id=data["board_id"]))
+        except Exception as exc:
+            flash(f"Could not update event: {exc}", "danger")
+    return render_template(
+        "admin/event_form.html",
+        event=event,
+        boards=boards,
+        default_board_id=event["board_id"],
+        default_date=event["event_date"],
+        default_event_type=event["event_type"],
+        default_tool=event.get("tool") or "",
+        default_description=event.get("description") or "",
+        update_location_default=False,
+        event_types=BOARD_EVENT_TYPES,
+    )
+
+
+@app.route("/admin/event/<int:event_id>/delete", methods=["POST"])
+@login_required
+def admin_event_delete(event_id):
+    event = db.get_board_event(event_id)
+    if not event:
+        flash("Event not found.", "danger")
+        return redirect(url_for("admin_index"))
+    board_id = event["board_id"]
+    try:
+        db.delete_board_event(event_id)
+        flash("Board event deleted.", "success")
+    except Exception as exc:
+        flash(f"Could not delete event: {exc}", "danger")
+    return redirect(url_for("board_detail", board_id=board_id))
+
+
 @app.route("/admin/history/new", methods=["GET", "POST"])
 @login_required
 def admin_history_new():
@@ -593,6 +763,26 @@ def _history_form_data():
         "firmware": request.form["firmware"],
         "installer": request.form.get("installer") or None,
         "result": request.form.get("result") or None,
+    }
+
+
+def _event_form_data():
+    tool = db.normalize_tool_name(request.form.get("tool"))
+    event_type = (request.form.get("event_type") or "").strip().lower()
+    if event_type not in BOARD_EVENT_TYPES:
+        event_type = "note"
+    description = (request.form.get("description") or "").strip()
+    if not description:
+        raise ValueError("Description is required.")
+    return {
+        "board_id": int(request.form["board_id"]),
+        "event_date": request.form["event_date"],
+        "event_time": request.form.get("event_time") or None,
+        "event_type": event_type,
+        "description": description,
+        "tool": tool,
+        "source": "admin",
+        "source_ref": None,
     }
 
 

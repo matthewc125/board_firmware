@@ -11,8 +11,9 @@
     <p class="text-muted mb-0">Board ID {{ board.board_id }}</p>
   </div>
   {% if session.get('admin') %}
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
     <a href="{{ url_for('admin_board_edit', board_id=board.board_id) }}" class="btn btn-sm btn-outline-secondary">Edit board</a>
+    <a href="{{ url_for('admin_event_new', board_id=board.board_id) }}" class="btn btn-sm btn-outline-primary">Add board event</a>
     <a href="{{ url_for('admin_history_new', board_id=board.board_id) }}" class="btn btn-sm btn-primary">Add firmware record</a>
     <form method="post" action="{{ url_for('admin_board_delete', board_id=board.board_id) }}" class="d-inline"
           onsubmit="return confirm('Move this board and all its firmware history to deleted records?')">
@@ -60,8 +61,13 @@
   </div>
 
   <div class="col-md-7">
-    {% if events %}
-    <h2 class="h5">Board Events</h2>
+    {% if events or session.get('admin') %}
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0">Board Events</h2>
+      {% if session.get('admin') %}
+      <a href="{{ url_for('admin_event_new', board_id=board.board_id) }}" class="small">Add event</a>
+      {% endif %}
+    </div>
     <div class="table-responsive mb-4">
       <table class="table table-sm table-hover align-middle">
         <thead>
@@ -70,6 +76,7 @@
             <th>Type</th>
             <th>Description</th>
             <th>Tool</th>
+            {% if session.get('admin') %}<th></th>{% endif %}
           </tr>
         </thead>
         <tbody>
@@ -79,7 +86,18 @@
             <td>{{ row.event_type }}</td>
             <td>{{ row.description }}</td>
             <td>{{ row.tool or '—' }}</td>
+            {% if session.get('admin') %}
+            <td class="text-nowrap">
+              <a href="{{ url_for('admin_event_edit', event_id=row.event_id) }}" class="small me-2">Edit</a>
+              <form method="post" action="{{ url_for('admin_event_delete', event_id=row.event_id) }}" class="d-inline"
+                    onsubmit="return confirm('Delete this board event permanently?')">
+                <button type="submit" class="btn btn-link btn-sm text-danger p-0 align-baseline">Remove</button>
+              </form>
+            </td>
+            {% endif %}
           </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted">No board events yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>

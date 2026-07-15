@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}{% if event %}Edit Board Event{% else %}Add Board Event{% endif %}{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">{% if event %}Edit Board Event{% else %}Add Board Event{% endif %}</h1>
+<p class="text-muted">Record installs, removals, moves, repairs, and other location history. Moves can also update the board&rsquo;s current location.</p>
+
+<form method="post" class="row g-3" id="event-form">
+  <div class="col-md-6">
+    <label class="form-label">Board</label>
+    <select class="form-select" name="board_id" required>
+      {% for b in boards %}
+      <option value="{{ b.board_id }}"
+        {% if (event and event.board_id == b.board_id) or (default_board_id and default_board_id == b.board_id) %}selected{% endif %}>
+        {{ b.board_id }} — {{ b.product_name }} {{ b.board_name }} {{ b.tool or 'Unassigned' }} #{{ b.serial }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Date</label>
+    <input type="date" class="form-control" name="event_date"
+           value="{{ event.event_date if event else default_date }}" required>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label">Time</label>
+    <input type="time" class="form-control" name="event_time"
+           value="{{ event.event_time if event and event.event_time else '' }}">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Event type</label>
+    <select class="form-select" name="event_type" id="event-type" required>
+      {% for t in event_types %}
+      <option value="{{ t }}"
+        {% if (event and event.event_type == t) or (not event and t == default_event_type) %}selected{% endif %}>
+        {{ t }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Tool</label>
+    <input type="text" class="form-control" name="tool" id="tool-input"
+           value="{{ event.tool if event else default_tool }}"
+           placeholder="Tool9, Bench, OA">
+    <div class="form-text">Use ToolN (e.g. Tool9). Optional for notes that are not location moves.</div>
+  </div>
+  <div class="col-md-4 d-flex align-items-end">
+    <div class="form-check mb-2">
+      <input class="form-check-input" type="checkbox" name="update_location" value="1" id="update-location"
+             {% if update_location_default %}checked{% endif %}>
+      <label class="form-check-label" for="update-location">
+        Update board location to this tool
+      </label>
+    </div>
+  </div>
+  <div class="col-12">
+    <label class="form-label">Description</label>
+    <textarea class="form-control" name="description" rows="3" required
+              placeholder="Moved from Bench to Tool-9">{{ event.description if event else default_description }}</textarea>
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Save</button>
+    {% if event %}
+    <a href="{{ url_for('board_detail', board_id=event.board_id) }}" class="btn btn-link">Cancel</a>
+    {% elif default_board_id %}
+    <a href="{{ url_for('board_detail', board_id=default_board_id) }}" class="btn btn-link">Cancel</a>
+    {% else %}
+    <a href="{{ url_for('admin_index') }}" class="btn btn-link">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if event %}
+<form method="post" action="{{ url_for('admin_event_delete', event_id=event.event_id) }}" class="mt-4"
+      onsubmit="return confirm('Delete this board event permanently?')">
+  <button type="submit" class="btn btn-outline-danger btn-sm">Delete event</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const typeSelect = document.getElementById("event-type");
+  const updateLocation = document.getElementById("update-location");
+  if (!typeSelect || !updateLocation) return;
+
+  function syncCheckbox() {
+    const t = typeSelect.value;
+    if (t === "install" || t === "location") {
+      // leave user choice; default already checked for new install/move
+      return;
+    }
+    if (t === "remove") {
+      updateLocation.checked = false;
+    }
+  }
+
+  typeSelect.addEventListener("change", syncCheckbox);
+})();
+</script>
+{% endblock %}

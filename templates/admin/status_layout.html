@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Edit status tools — Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h4 mb-1">Edit status tools</h1>
+    <p class="text-muted small mb-0">
+      Choose which tools appear on the Firmware Status page and which section they belong to.
+      Comma-separated tool numbers (e.g. <code>9, 13, 14</code>). A tool can only be in one section.
+    </p>
+  </div>
+  <a href="{{ url_for('status') }}" class="btn btn-outline-secondary btn-sm">Back to Status</a>
+</div>
+
+<form method="post" class="row g-3">
+  {% for section in sections %}
+  <div class="col-md-4">
+    <label class="form-label">{{ section.title }}</label>
+    <input type="text" class="form-control" name="tools_{{ section.key }}"
+           value="{{ section.tool_nums|join(', ') }}"
+           placeholder="e.g. 1, 5, 7">
+    <div class="form-text">Section key: {{ section.key }}</div>
+  </div>
+  {% endfor %}
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary">Save layout</button>
+    <a href="{{ url_for('status') }}" class="btn btn-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Firmware Status — Board Firmware Log{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
+  <div>
+    <h1 class="h3 mb-1">Firmware Status</h1>
+    <p class="text-muted mb-0">Current firmware by tool and board type. Colors match the Excel export (green newest, yellow middle, red oldest).</p>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('firmware_status_export') }}">Download .xlsx</a>
+    {% if session.get('admin') %}
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_status_firmware') }}">Edit current firmware</a>
+    <a class="btn btn-outline-primary btn-sm" href="{{ url_for('admin_status_layout') }}">Edit tools / sections</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="fw-status-legend small text-muted mb-4">
+  <span class="fw-rank-swatch fw-rank-newest"></span> Newest
+  <span class="fw-rank-swatch fw-rank-middle ms-3"></span> Middle
+  <span class="fw-rank-swatch fw-rank-oldest ms-3"></span> Oldest
+</div>
+
+{% for section in sections %}
+<section class="mb-5">
+  <h2 class="h5 mb-3">{{ section.title }}</h2>
+  <div class="table-responsive fw-status-table-wrap">
+    <table class="table table-sm table-bordered align-middle text-center fw-status-table mb-0">
+      <thead>
+        <tr>
+          <th scope="col" class="text-start">Tool</th>
+          {% for col in columns %}
+          <th scope="col">{{ col.label }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in section.rows %}
+        <tr>
+          <th scope="row" class="text-start text-nowrap">{{ row.tool }}</th>
+          {% for cell in row.cells %}
+          <td class="{% if cell.rank %}fw-rank-{{ cell.rank }}{% endif %}">
+            {% if cell.is_live and cell.sources %}
+              {% for src in cell.sources %}
+              <a class="fw-status-live-link" href="{{ url_for('board_detail', board_id=src.board_id) }}" title="Board {{ src.board_id }}"><code>{{ src.firmware }}</code></a>{% if not loop.last %} <span class="text-muted">/</span> {% endif %}
+              {% endfor %}
+            {% elif cell.firmware %}
+              <code>{{ cell.firmware }}</code>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ columns|length + 1 }}" class="text-muted text-start">No tools in this section.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+{% endblock %}

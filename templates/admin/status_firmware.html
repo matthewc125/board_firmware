@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Edit status firmware — Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+  <div>
+    <h1 class="h4 mb-1">Edit status firmware</h1>
+    <p class="text-muted small mb-0">
+      Live board readings always win and are linked below. For other cells, choose Auto (catalog default),
+      Blank, or a custom version. Tool&nbsp;14 ES4 is left blank until the <code>1.04.38.xx</code> suffix is known.
+    </p>
+  </div>
+  <a href="{{ url_for('status') }}" class="btn btn-outline-secondary btn-sm">Back to Status</a>
+</div>
+
+<form method="post">
+  {% for section in sections %}
+  <section class="mb-4">
+    <h2 class="h6 mb-2">{{ section.title }}</h2>
+    <div class="table-responsive fw-status-table-wrap">
+      <table class="table table-sm table-bordered align-middle fw-status-table mb-0">
+        <thead>
+          <tr>
+            <th class="text-start">Tool</th>
+            {% for col in columns %}
+            <th>{{ col.label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in section.rows %}
+          <tr>
+            <th class="text-start text-nowrap">{{ row.tool }}</th>
+            {% for cell in row.cells %}
+            {% set field = row.tool_num ~ '_' ~ loop.index0 %}
+            <td class="fw-status-edit-cell {% if cell.rank %}fw-rank-{{ cell.rank }}{% endif %}">
+              <input type="hidden" name="column_{{ field }}" value="{{ cell.column_key }}">
+              <input type="hidden" name="tool_{{ field }}" value="{{ row.tool_num }}">
+              {% if cell.is_live %}
+                <div class="small mb-1">
+                  {% for src in cell.sources %}
+                  <div>
+                    <a href="{{ url_for('board_detail', board_id=src.board_id) }}"><code>{{ src.firmware }}</code></a>
+                    <span class="text-muted">· board {{ src.board_id }}</span>
+                  </div>
+                  {% endfor %}
+                </div>
+                <input type="hidden" name="mode_{{ field }}" value="auto">
+                <span class="badge text-bg-light border">live</span>
+              {% else %}
+                {% set cell_mode = 'value' if (cell.override != '__missing__' and cell.override) else ('blank' if cell.override != '__missing__' else 'auto') %}
+                <select class="form-select form-select-sm mb-1" name="mode_{{ field }}" data-cell-mode>
+                  <option value="auto" {% if cell_mode == 'auto' %}selected{% endif %}>Auto</option>
+                  <option value="blank" {% if cell_mode == 'blank' %}selected{% endif %}>Blank</option>
+                  <option value="value" {% if cell_mode == 'value' %}selected{% endif %}>Custom</option>
+                </select>
+                <input type="text" class="form-control form-control-sm"
+                       name="firmware_{{ field }}"
+                       value="{% if cell_mode == 'value' %}{{ cell.firmware }}{% endif %}"
+                       placeholder="{{ cell.firmware or 'version' }}"
+                       {% if cell_mode != 'value' %}disabled{% endif %}
+                       data-cell-firmware>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+
+  <button type="submit" class="btn btn-primary">Save firmware overrides</button>
+  <a href="{{ url_for('status') }}" class="btn btn-link">Cancel</a>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  document.querySelectorAll("[data-cell-mode]").forEach((select) => {
+    const cell = select.closest("td");
+    const input = cell && cell.querySelector("[data-cell-firmware]");
+    if (!input) return;
+    const sync = () => {
+      input.disabled = select.value !== "value";
+    };
+    select.addEventListener("change", sync);
+    sync();
+  });
+})();
+</script>
+{% endblock %}

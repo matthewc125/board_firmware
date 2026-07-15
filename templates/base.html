@@ -19,7 +19,8 @@
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav me-auto">
           <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="/hardware">Hardware</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('status') }}">Status</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('hardware') }}">Hardware</a></li>
           <li class="nav-item"><a class="nav-link" href="{{ url_for('data') }}">Data</a></li>
         </ul>
         <ul class="navbar-nav">
